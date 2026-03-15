@@ -8,6 +8,8 @@ import {
     arrowClass,
     addCollapseArrowsToMessages,
     removeCollapseArrowsFromMessages,
+    startObserver,
+    stopObserver,
     handleArrowClick,
     handleCollapseAllClick,
     handleExpandAllClick,
@@ -59,6 +61,7 @@ function handleMasterEnableToggleChange(event) {
 
     if (settings.isEnabled) {
         addCollapseArrowsToMessages(); // Now imported from actions.js
+        startObserver();
     } else {
         removeCollapseArrowsFromMessages(); // Now imported from actions.js
     }
@@ -77,6 +80,7 @@ jQuery(async () => {
 
         if (settings.isEnabled) {
             addCollapseArrowsToMessages(); // Add arrows on load if enabled (imported)
+            startObserver();
         }
         // Event Handlers
         $("#testExtensionMasterEnable").on("change", handleMasterEnableToggleChange);
