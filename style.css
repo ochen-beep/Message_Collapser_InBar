@@ -1,0 +1,27 @@
+/* Message Collapser — кнопка внутри панели действий сообщения */
+
+/* Кнопка сворачивания — выглядит как стандартная кнопка ST */
+.message-collapser-arrow {
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.message-collapser-arrow:hover {
+    opacity: 1;
+    color: var(--SmartThemeBodyColor, #fff);
+}
+
+/* Когда сообщение свёрнуто — иконка слегка подсвечена для индикации */
+.message-collapser-message-collapsed .message-collapser-arrow {
+    opacity: 1;
+    color: var(--SmartThemeQuoteColor, #aaa);
+}
+
+/* Скрыть текст сообщения (collapsed state) */
+.message-collapser-message-collapsed .mes_text {
+    display: none !important;
+}
