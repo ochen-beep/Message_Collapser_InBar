@@ -1,11 +1,11 @@
 {
-    "display_name": "Message_Collapser",
+    "display_name": "Message_Collapser_InBar",
     "loading_order": 9,
     "requires": [],
     "optional": [],
     "js": "main.js",
-    "author": "nf286",
+    "author": "ochen-beep",
     "version": "1.0.0",
-    "homePage": "https://github.com/nfuller286/Message_Collapser",
+    "homePage": "https://github.com/ochen-beep/Message_Collapser_InBar",
     "css": "style.css"
 }
