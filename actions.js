@@ -9,16 +9,64 @@ export function addCollapseArrowsToMessages() {
     $('.mes').each(function() {
         const message = $(this);
         if (message.find('.' + arrowClass).length === 0) {
-            const arrowElement = $('<span class="' + arrowClass + '" style="cursor: pointer; margin-right: 5px;"><i class="fas fa-chevron-down"></i></span>');
-            message.prepend(arrowElement);
+            const arrowElement = $('<div class="mes_button ' + arrowClass + '" title="Свернуть/развернуть сообщение"><i class="fas fa-chevron-up"></i></div>');
+            // Insert as the first button in the message action bar
+            const buttonsContainer = message.find('.mes_buttons');
+            if (buttonsContainer.length) {
+                buttonsContainer.prepend(arrowElement);
+            } else {
+                // Fallback: prepend to message block if buttons container not found
+                message.prepend(arrowElement);
+            }
         }
     });
+}
+
+// Observer to add arrows to newly added messages (e.g. streaming)
+let _collapserObserver = null;
+
+export function startObserver() {
+    if (_collapserObserver) return;
+    const chat = document.getElementById('chat');
+    if (!chat) return;
+    _collapserObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType === 1 && node.classList && node.classList.contains('mes')) {
+                    const message = $(node);
+                    if (message.find('.' + arrowClass).length === 0) {
+                        const arrowElement = $('<div class="mes_button ' + arrowClass + '" title="Свернуть/развернуть сообщение"><i class="fas fa-chevron-up"></i></div>');
+                        const buttonsContainer = message.find('.mes_buttons');
+                        if (buttonsContainer.length) {
+                            buttonsContainer.prepend(arrowElement);
+                        } else {
+                            message.prepend(arrowElement);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    _collapserObserver.observe(chat, { childList: true });
+}
+
+export function stopObserver() {
+    if (_collapserObserver) {
+        _collapserObserver.disconnect();
+        _collapserObserver = null;
+    }
 }
 
 // Function to remove collapse/expand arrows from messages
 export function removeCollapseArrowsFromMessages() {
     console.log("Message Collapser: Removing collapse arrows.");
+    // Expand all collapsed messages before removing arrows
+    $('.' + collapsedClass).each(function() {
+        $(this).find('.mes_text').show();
+        $(this).removeClass(collapsedClass);
+    });
     $('.' + arrowClass).remove();
+    stopObserver();
 }
 
 // Handler for clicking an arrow
@@ -32,9 +80,9 @@ export function handleArrowClick(event) {
     message.toggleClass(collapsedClass);
 
     if (messageText.is(':visible')) {
-        icon.removeClass('fa-chevron-right').addClass('fa-chevron-down');
+        icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
     } else {
-        icon.removeClass('fa-chevron-down').addClass('fa-chevron-right');
+        icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
     }
 }
 
@@ -60,7 +108,7 @@ export function handleCollapseDisabledClick() {
         messageText.hide();
         message.addClass(collapsedClass);
         if (arrowSpan.length && icon.length) {
-            icon.removeClass('fa-chevron-down').addClass('fa-chevron-right');
+            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
         }
         count++;
     });
@@ -94,7 +142,7 @@ export function handleExpandDisabledClick() {
         messageText.show();
         message.removeClass(collapsedClass);
         if (arrowSpan.length && icon.length) {
-            icon.removeClass('fa-chevron-right').addClass('fa-chevron-down');
+            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
         }
         count++;
     });
@@ -119,7 +167,7 @@ export function handleExpandAllClick() {
             messageText.show();
             message.removeClass(collapsedClass);
             if (arrowSpan.length && icon.length) {
-                icon.removeClass('fa-chevron-right').addClass('fa-chevron-down');
+                icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
             }
             count++;
         }
@@ -144,7 +192,7 @@ export function handleCollapseAllClick() {
             messageText.hide();
             message.addClass(collapsedClass);
             if (arrowSpan.length && icon.length) {
-                icon.removeClass('fa-chevron-down').addClass('fa-chevron-right');
+                icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
             }
             count++;
         }
