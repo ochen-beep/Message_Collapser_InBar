@@ -8,6 +8,7 @@ import {
     arrowClass,
     addCollapseArrowsToMessages,
     removeCollapseArrowsFromMessages,
+    autoCollapseHiddenMessages,
     startObserver,
     stopObserver,
     handleArrowClick,
@@ -60,10 +61,11 @@ function handleMasterEnableToggleChange(event) {
     console.log("Message Collapser is now: " + (settings.isEnabled ? 'Enabled' : 'Disabled'));
 
     if (settings.isEnabled) {
-        addCollapseArrowsToMessages(); // Now imported from actions.js
+        addCollapseArrowsToMessages();
+        autoCollapseHiddenMessages();
         startObserver();
     } else {
-        removeCollapseArrowsFromMessages(); // Now imported from actions.js
+        removeCollapseArrowsFromMessages();
     }
 }
 
@@ -79,19 +81,23 @@ jQuery(async () => {
         updateStatusIndicator(settings.isEnabled);
 
         if (settings.isEnabled) {
-            addCollapseArrowsToMessages(); // Add arrows on load if enabled (imported)
+            addCollapseArrowsToMessages();
+            // ST грузит чат асинхронно, поэтому откладываем установку
+            // начальных состояний на следующий тик — к тому моменту CSS уже применён
+            // и MutationObserver успел добавить кнопки к сообщениям
+            setTimeout(() => autoCollapseHiddenMessages(), 0);
             startObserver();
         }
+
         // Event Handlers
         $("#testExtensionMasterEnable").on("change", handleMasterEnableToggleChange);
-        // Global action buttons now use imported handlers
         $("#testExtensionCollapseDisabled").on("click", handleCollapseDisabledClick);
         $("#testExtensionExpandDisabled").on("click", handleExpandDisabledClick);
         $("#testExtensionExpandAll").on("click", handleExpandAllClick);
         $("#testExtensionCollapseAll").on('click', handleCollapseAllClick);
 
-        // Arrow click handler - uses imported arrowClass and handleArrowClick
-        $(document).on('click', '.' + arrowClass, handleArrowClick); // handleArrowClick is imported
+        // Arrow click handler
+        $(document).on('click', '.' + arrowClass, handleArrowClick);
     } catch (error) {
         console.error("Error loading Message Collapser settings HTML or initializing:", error);
         toastr.error("Failed to load Message Collapser UI. Check console for details.");
