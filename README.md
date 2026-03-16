@@ -11,6 +11,7 @@ Extensions → Install extension from URL → `https://github.com/ochen-beep/Mes
 ## Usage
 
 - **Chevron button** in the action bar — collapse or expand individual messages
+- **Auto-collapse on load** — messages excluded from the prompt are collapsed automatically when opening a chat
 - **Collapse/Expand Hidden** in settings — bulk-collapse messages excluded from the prompt
 - **Collapse/Expand All** in settings — collapse or expand everything at once
 - **Master toggle** — disable the extension without uninstalling it
