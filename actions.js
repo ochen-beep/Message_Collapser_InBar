@@ -86,21 +86,36 @@ export function handleArrowClick(event) {
     }
 }
 
-export function handleCollapseDisabledClick() {
-    const disabledSelectorString = "$('.mes_unhide.fa-eye-slash:visible').closest('.mes')";
-    const $disabledMessages = $('.mes_unhide.fa-eye-slash:visible').closest('.mes');
-    const $allMessages = $('.mes');
+/**
+ * Определяет, исключено ли сообщение из промпта.
+ *
+ * .mes_unhide.fa-eye-slash присутствует в DOM у КАЖДОГО сообщения.
+ * ST скрывает её через CSS: .mes[is_system="false"] .mes_unhide { display: none; }
+ * Когда сообщение исключают из промпта — is_system меняется, правило перестаёт
+ * применяться, и кнопка получает ненулевой display.
+ *
+ * jQuery .css('display') возвращает собственный computed display элемента,
+ * не зависящий от display:none у родителя (.extraMesButtons),
+ * поэтому работает корректно вне зависимости от того, открыта ли панель действий.
+ */
+function isMessageExcludedFromPrompt(mesElement) {
+    const $unhide = $(mesElement).find('.mes_unhide.fa-eye-slash');
+    return $unhide.length > 0 && $unhide.css('display') !== 'none';
+}
 
+export function handleCollapseDisabledClick() {
+    const $disabledMessages = $('.mes').filter(function() {
+        return isMessageExcludedFromPrompt(this);
+    });
 
     if ($disabledMessages.length === 0) {
-        toastr.info("No 'hidden' messages (with visible .mes_unhide.fa-eye-slash) found to collapse.");
+        toastr.info("No 'hidden' messages found to collapse.");
         return;
     }
 
     let count = 0;
-    $disabledMessages.each(function(index) {
+    $disabledMessages.each(function() {
         const message = $(this);
-
         const messageText = message.find('.mes_text');
         const arrowSpan = message.find('.' + arrowClass);
         const icon = arrowSpan.find('i');
@@ -121,20 +136,18 @@ export function handleCollapseDisabledClick() {
 }
 
 export function handleExpandDisabledClick() {
-    const disabledSelectorString = "$('.mes_unhide.fa-eye-slash:visible').closest('.mes')";
-    const $disabledMessages = $('.mes_unhide.fa-eye-slash:visible').closest('.mes');
-    const $allMessages = $('.mes');
-
+    const $disabledMessages = $('.mes').filter(function() {
+        return isMessageExcludedFromPrompt(this);
+    });
 
     if ($disabledMessages.length === 0) {
-        toastr.info("No 'hidden' messages (with visible .mes_unhide.fa-eye-slash) found to expand.");
+        toastr.info("No 'hidden' messages found to expand.");
         return;
     }
 
     let count = 0;
-    $disabledMessages.each(function(index) {
+    $disabledMessages.each(function() {
         const message = $(this);
-
         const messageText = message.find('.mes_text');
         const arrowSpan = message.find('.' + arrowClass);
         const icon = arrowSpan.find('i');
