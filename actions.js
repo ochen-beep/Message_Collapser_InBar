@@ -10,12 +10,10 @@ export function addCollapseArrowsToMessages() {
         const message = $(this);
         if (message.find('.' + arrowClass).length === 0) {
             const arrowElement = $('<div class="mes_button ' + arrowClass + '" title="Свернуть/развернуть сообщение"><i class="fas fa-chevron-up"></i></div>');
-            // Insert as the first button in the message action bar
             const buttonsContainer = message.find('.mes_buttons');
             if (buttonsContainer.length) {
                 buttonsContainer.prepend(arrowElement);
             } else {
-                // Fallback: prepend to message block if buttons container not found
                 message.prepend(arrowElement);
             }
         }
@@ -43,6 +41,8 @@ export function startObserver() {
                             message.prepend(arrowElement);
                         }
                     }
+                    // Устанавливаем начальное состояние для только что добавленного сообщения
+                    applyInitialCollapseState(node);
                 }
             }
         }
@@ -60,7 +60,6 @@ export function stopObserver() {
 // Function to remove collapse/expand arrows from messages
 export function removeCollapseArrowsFromMessages() {
     console.log("Message Collapser: Removing collapse arrows.");
-    // Expand all collapsed messages before removing arrows
     $('.' + collapsedClass).each(function() {
         $(this).find('.mes_text').show();
         $(this).removeClass(collapsedClass);
@@ -101,6 +100,38 @@ export function handleArrowClick(event) {
 function isMessageExcludedFromPrompt(mesElement) {
     const $unhide = $(mesElement).find('.mes_unhide.fa-eye-slash');
     return $unhide.length > 0 && $unhide.css('display') !== 'none';
+}
+
+/**
+ * Устанавливает начальное состояние одного сообщения:
+ * - исключено из промпта → свернуть
+ * - обычное → развернуть (на случай если что-то его уже свернуло)
+ */
+function applyInitialCollapseState(mesElement) {
+    const message = $(mesElement);
+    const messageText = message.find('.mes_text');
+    const icon = message.find('.' + arrowClass + ' i');
+
+    if (isMessageExcludedFromPrompt(mesElement)) {
+        messageText.hide();
+        message.addClass(collapsedClass);
+        if (icon.length) icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+    } else {
+        messageText.show();
+        message.removeClass(collapsedClass);
+        if (icon.length) icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+    }
+}
+
+/**
+ * Устанавливает начальное состояние всех сообщений в чате:
+ * исключённые из промпта сворачиваются, остальные разворачиваются.
+ * Вызывается после addCollapseArrowsToMessages при загрузке/смене чата.
+ */
+export function autoCollapseHiddenMessages() {
+    $('.mes').each(function() {
+        applyInitialCollapseState(this);
+    });
 }
 
 export function handleCollapseDisabledClick() {
