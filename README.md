@@ -1,21 +1,16 @@
-# Message Collapser InBar — SillyTavern Extension
+# Message Collapser InBar
+
+SillyTavern extension. Adds a collapse button inside the message action bar — next to edit, copy, and other buttons — instead of floating it outside the chat bubble.
 
 Fork of [InspectorCaracal/Message_Collapser](https://github.com/InspectorCaracal/Message_Collapser).
 
-**Difference from the original:** the collapse button lives inside the message action bar (alongside edit, copy, and other buttons), instead of floating outside the chat bubble.
-
-## Features
-
-- **Collapse/expand individual messages** — click the chevron button in the message action bar
-- **Collapse All / Expand All** — bulk actions via the settings panel
-- **Collapse Hidden / Expand Hidden** — manage soft-deleted messages
-- **Master toggle** — enable or disable the extension entirely
-
 ## Installation
 
-1. Open SillyTavern → Extensions → Install extension from URL
-2. Paste: `https://github.com/ochen-beep/Message_Collapser_InBar`
+Extensions → Install extension from URL → `https://github.com/ochen-beep/Message_Collapser_InBar`
 
-## Licensing
+## Usage
 
-Do whatever you want with it.
+- **Chevron button** in the action bar — collapse or expand individual messages
+- **Collapse/Expand Hidden** in settings — bulk-collapse messages excluded from the prompt
+- **Collapse/Expand All** in settings — collapse or expand everything at once
+- **Master toggle** — disable the extension without uninstalling it
