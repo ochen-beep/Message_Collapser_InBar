@@ -1,53 +1,165 @@
-// actions.js - Handles message manipulation and UI actions for Message_Collapser
+// actions.js — Message Collapser InBar
+// Вся логика работы с DOM чата: добавление/удаление стрелочек, сворачивание.
 
-export const arrowClass = 'message-collapser-arrow';
+export const arrowClass    = 'message-collapser-arrow';
 export const collapsedClass = 'message-collapser-message-collapsed';
 
-// Function to add collapse/expand arrows to messages
-export function addCollapseArrowsToMessages() {
-    console.log("Message Collapser: Adding collapse arrows.");
-    $('.mes').each(function() {
-        const message = $(this);
-        if (message.find('.' + arrowClass).length === 0) {
-            const arrowElement = $('<div class="mes_button ' + arrowClass + '" title="Свернуть/развернуть сообщение"><i class="fas fa-chevron-up"></i></div>');
-            const buttonsContainer = message.find('.mes_buttons');
-            if (buttonsContainer.length) {
-                buttonsContainer.prepend(arrowElement);
-            } else {
-                message.prepend(arrowElement);
-            }
-        }
-    });
+// ─── Arrow element factory ───────────────────────────────────────────────────
+
+/**
+ * Создаёт DOM-элемент кнопки-стрелочки.
+ * Вынесено отдельно, чтобы не дублировать разметку в нескольких местах.
+ */
+function createArrowElement() {
+    return $(
+        `<div class="mes_button ${arrowClass}" title="Свернуть/развернуть сообщение">` +
+        '<i class="fas fa-chevron-up"></i>' +
+        '</div>'
+    );
 }
 
-// Observer to add arrows to newly added messages (e.g. streaming)
+/**
+ * Добавляет стрелочку в конкретное сообщение, если её там ещё нет.
+ * @param {HTMLElement|jQuery} mesElement — элемент .mes
+ */
+function injectArrow(mesElement) {
+    const message = $(mesElement);
+    // Не добавляем повторно
+    if (message.find('.' + arrowClass).length > 0) return;
+
+    const arrow = createArrowElement();
+    const buttonsContainer = message.find('.mes_buttons');
+    if (buttonsContainer.length) {
+        buttonsContainer.prepend(arrow);
+    } else {
+        message.prepend(arrow);
+    }
+}
+
+// ─── Collapse state helpers ──────────────────────────────────────────────────
+
+/**
+ * Определяет, исключено ли сообщение из промпта.
+ *
+ * ST выставляет атрибут is_system="true" на .mes когда сообщение
+ * отключают кнопкой «Exclude from prompt».
+ * Проверяем атрибут напрямую — это надёжнее, чем читать computed CSS
+ * (который зависит от конкретных правил темы/версии ST).
+ *
+ * @param {HTMLElement|jQuery} mesElement
+ * @returns {boolean}
+ */
+function isMessageExcludedFromPrompt(mesElement) {
+    return $(mesElement).attr('is_system') === 'true';
+}
+
+/**
+ * Визуально сворачивает одно сообщение.
+ * Управление видимостью — только через CSS-класс, jQuery .hide()/.show()
+ * не нужны: класс + правило в style.css уже всё делают.
+ */
+function collapseMessage(mesElement) {
+    const message = $(mesElement);
+    message.addClass(collapsedClass);
+    message.find('.' + arrowClass + ' i')
+           .removeClass('fa-chevron-up')
+           .addClass('fa-chevron-down');
+}
+
+/**
+ * Визуально разворачивает одно сообщение.
+ */
+function expandMessage(mesElement) {
+    const message = $(mesElement);
+    message.removeClass(collapsedClass);
+    message.find('.' + arrowClass + ' i')
+           .removeClass('fa-chevron-down')
+           .addClass('fa-chevron-up');
+}
+
+/**
+ * Устанавливает начальное состояние одного сообщения:
+ * - исключено из промпта → свернуть
+ * - обычное → развернуть
+ */
+function applyInitialCollapseState(mesElement) {
+    if (isMessageExcludedFromPrompt(mesElement)) {
+        collapseMessage(mesElement);
+    } else {
+        expandMessage(mesElement);
+    }
+}
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+/** Добавляет стрелочки ко всем сообщениям в чате. */
+export function addCollapseArrowsToMessages() {
+    $('.mes').each(function () { injectArrow(this); });
+}
+
+/** Убирает стрелочки, разворачивает все свёрнутые сообщения, останавливает observer. */
+export function removeCollapseArrowsFromMessages() {
+    $('.' + collapsedClass).each(function () { expandMessage(this); });
+    $('.' + arrowClass).remove();
+    stopObserver();
+}
+
+/**
+ * Устанавливает начальное состояние всех сообщений:
+ * исключённые из промпта сворачиваются, остальные разворачиваются.
+ * Вызывается после addCollapseArrowsToMessages при загрузке/смене чата.
+ */
+export function autoCollapseHiddenMessages() {
+    $('.mes').each(function () { applyInitialCollapseState(this); });
+}
+
+// ─── MutationObserver ────────────────────────────────────────────────────────
+
 let _collapserObserver = null;
 
+/**
+ * Запускает MutationObserver на контейнере чата.
+ *
+ * Следим за двумя типами мутаций:
+ * 1. childList  — новые .mes (входящие/генерируемые сообщения).
+ *    → добавляем стрелочку, применяем начальное состояние.
+ * 2. attributes / is_system — пользователь нажал «Exclude from prompt»
+ *    на уже существующем сообщении.
+ *    → немедленно сворачиваем или разворачиваем его.
+ */
 export function startObserver() {
     if (_collapserObserver) return;
     const chat = document.getElementById('chat');
     if (!chat) return;
+
     _collapserObserver = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
-            for (const node of mutation.addedNodes) {
-                if (node.nodeType === 1 && node.classList && node.classList.contains('mes')) {
-                    const message = $(node);
-                    if (message.find('.' + arrowClass).length === 0) {
-                        const arrowElement = $('<div class="mes_button ' + arrowClass + '" title="Свернуть/развернуть сообщение"><i class="fas fa-chevron-up"></i></div>');
-                        const buttonsContainer = message.find('.mes_buttons');
-                        if (buttonsContainer.length) {
-                            buttonsContainer.prepend(arrowElement);
-                        } else {
-                            message.prepend(arrowElement);
-                        }
+            // ── Новые сообщения ──────────────────────────────────────────────
+            if (mutation.type === 'childList') {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType === 1 && node.classList?.contains('mes')) {
+                        injectArrow(node);
+                        applyInitialCollapseState(node);
                     }
-                    // Устанавливаем начальное состояние для только что добавленного сообщения
-                    applyInitialCollapseState(node);
                 }
+            }
+
+            // ── Изменение атрибута is_system на существующем сообщении ───────
+            if (mutation.type === 'attributes') {
+                const mes = mutation.target.closest?.('.mes') ?? (
+                    mutation.target.classList?.contains('mes') ? mutation.target : null
+                );
+                if (mes) applyInitialCollapseState(mes);
             }
         }
     });
-    _collapserObserver.observe(chat, { childList: true });
+
+    _collapserObserver.observe(chat, {
+        childList:       true,
+        subtree:         true,   // нужно для attributes на дочерних .mes
+        attributes:      true,
+        attributeFilter: ['is_system'],
+    });
 }
 
 export function stopObserver() {
@@ -57,193 +169,84 @@ export function stopObserver() {
     }
 }
 
-// Function to remove collapse/expand arrows from messages
-export function removeCollapseArrowsFromMessages() {
-    console.log("Message Collapser: Removing collapse arrows.");
-    $('.' + collapsedClass).each(function() {
-        $(this).find('.mes_text').show();
-        $(this).removeClass(collapsedClass);
-    });
-    $('.' + arrowClass).remove();
-    stopObserver();
-}
+// ─── Click handlers ──────────────────────────────────────────────────────────
 
-// Handler for clicking an arrow
-export function handleArrowClick(event) {
-    const arrowSpan = $(this);
-    const icon = arrowSpan.find('i');
-    const message = arrowSpan.closest('.mes');
-    const messageText = message.find('.mes_text');
-
-    messageText.toggle();
-    message.toggleClass(collapsedClass);
-
-    if (messageText.is(':visible')) {
-        icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+/** Клик по стрелочке конкретного сообщения. */
+export function handleArrowClick() {
+    const message = $(this).closest('.mes');
+    if (message.hasClass(collapsedClass)) {
+        expandMessage(message);
     } else {
-        icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        collapseMessage(message);
     }
-}
-
-/**
- * Определяет, исключено ли сообщение из промпта.
- *
- * .mes_unhide.fa-eye-slash присутствует в DOM у КАЖДОГО сообщения.
- * ST скрывает её через CSS: .mes[is_system="false"] .mes_unhide { display: none; }
- * Когда сообщение исключают из промпта — is_system меняется, правило перестаёт
- * применяться, и кнопка получает ненулевой display.
- *
- * jQuery .css('display') возвращает собственный computed display элемента,
- * не зависящий от display:none у родителя (.extraMesButtons),
- * поэтому работает корректно вне зависимости от того, открыта ли панель действий.
- */
-function isMessageExcludedFromPrompt(mesElement) {
-    const $unhide = $(mesElement).find('.mes_unhide.fa-eye-slash');
-    return $unhide.length > 0 && $unhide.css('display') !== 'none';
-}
-
-/**
- * Устанавливает начальное состояние одного сообщения:
- * - исключено из промпта → свернуть
- * - обычное → развернуть (на случай если что-то его уже свернуло)
- */
-function applyInitialCollapseState(mesElement) {
-    const message = $(mesElement);
-    const messageText = message.find('.mes_text');
-    const icon = message.find('.' + arrowClass + ' i');
-
-    if (isMessageExcludedFromPrompt(mesElement)) {
-        messageText.hide();
-        message.addClass(collapsedClass);
-        if (icon.length) icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-    } else {
-        messageText.show();
-        message.removeClass(collapsedClass);
-        if (icon.length) icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-    }
-}
-
-/**
- * Устанавливает начальное состояние всех сообщений в чате:
- * исключённые из промпта сворачиваются, остальные разворачиваются.
- * Вызывается после addCollapseArrowsToMessages при загрузке/смене чата.
- */
-export function autoCollapseHiddenMessages() {
-    $('.mes').each(function() {
-        applyInitialCollapseState(this);
-    });
 }
 
 export function handleCollapseDisabledClick() {
-    const $disabledMessages = $('.mes').filter(function() {
-        return isMessageExcludedFromPrompt(this);
+    const $targets = $('.mes').filter(function () {
+        return isMessageExcludedFromPrompt(this) && !$(this).hasClass(collapsedClass);
     });
 
-    if ($disabledMessages.length === 0) {
-        toastr.info("No 'hidden' messages found to collapse.");
+    if ($targets.length === 0) {
+        toastr.info("No uncollapsed 'excluded' messages found.");
         return;
     }
 
-    let count = 0;
-    $disabledMessages.each(function() {
-        const message = $(this);
-        const messageText = message.find('.mes_text');
-        const arrowSpan = message.find('.' + arrowClass);
-        const icon = arrowSpan.find('i');
-
-        messageText.hide();
-        message.addClass(collapsedClass);
-        if (arrowSpan.length && icon.length) {
-            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-        }
-        count++;
-    });
-
-    if (count > 0) {
-        toastr.success(count + (count === 1 ? " 'hidden' message collapsed." : " 'hidden' messages collapsed."));
-    } else {
-        toastr.info("No 'hidden' messages found to collapse (post-loop check).");
-    }
+    $targets.each(function () { collapseMessage(this); });
+    toastr.success(
+        $targets.length + ($targets.length === 1
+            ? " excluded message collapsed."
+            : " excluded messages collapsed.")
+    );
 }
 
 export function handleExpandDisabledClick() {
-    const $disabledMessages = $('.mes').filter(function() {
-        return isMessageExcludedFromPrompt(this);
+    const $targets = $('.mes').filter(function () {
+        return isMessageExcludedFromPrompt(this) && $(this).hasClass(collapsedClass);
     });
 
-    if ($disabledMessages.length === 0) {
-        toastr.info("No 'hidden' messages found to expand.");
+    if ($targets.length === 0) {
+        toastr.info("No collapsed 'excluded' messages found.");
         return;
     }
 
-    let count = 0;
-    $disabledMessages.each(function() {
-        const message = $(this);
-        const messageText = message.find('.mes_text');
-        const arrowSpan = message.find('.' + arrowClass);
-        const icon = arrowSpan.find('i');
-
-        messageText.show();
-        message.removeClass(collapsedClass);
-        if (arrowSpan.length && icon.length) {
-            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-        }
-        count++;
-    });
-
-    if (count > 0) {
-        toastr.success(count + (count === 1 ? " 'hidden' message expanded." : " 'hidden' messages expanded."));
-    } else {
-        toastr.info("No 'hidden' messages found to expand (post-loop check).");
-    }
-}
-
-export function handleExpandAllClick() {
-    console.log("Message Collapser: Expanding all messages.");
-    let count = 0;
-    $('.mes').each(function() {
-        const message = $(this);
-        if (message.find('.mes_text').is(':hidden') || message.hasClass(collapsedClass)) {
-            const messageText = message.find('.mes_text');
-            const arrowSpan = message.find('.' + arrowClass);
-            const icon = arrowSpan.find('i');
-
-            messageText.show();
-            message.removeClass(collapsedClass);
-            if (arrowSpan.length && icon.length) {
-                icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-            }
-            count++;
-        }
-    });
-    if (count > 0) {
-        toastr.success(count + (count === 1 ? " message expanded." : " messages expanded."));
-    } else {
-        toastr.info("All messages already expanded or no messages to expand.");
-    }
+    $targets.each(function () { expandMessage(this); });
+    toastr.success(
+        $targets.length + ($targets.length === 1
+            ? " excluded message expanded."
+            : " excluded messages expanded.")
+    );
 }
 
 export function handleCollapseAllClick() {
-    console.log("Message Collapser: Collapsing all messages.");
-    let count = 0;
-    $('.mes').each(function() {
-        const message = $(this);
-        if (message.find('.mes_text').is(':visible') || !message.hasClass(collapsedClass)) {
-            const messageText = message.find('.mes_text');
-            const arrowSpan = message.find('.' + arrowClass);
-            const icon = arrowSpan.find('i');
+    // Берём только те сообщения, которые ещё не свёрнуты
+    const $targets = $('.mes').not('.' + collapsedClass);
 
-            messageText.hide();
-            message.addClass(collapsedClass);
-            if (arrowSpan.length && icon.length) {
-                icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-            }
-            count++;
-        }
-    });
-    if (count > 0) {
-        toastr.success(count + (count === 1 ? " message collapsed." : " messages collapsed."));
-    } else {
-        toastr.info("All messages already collapsed or no messages to collapse.");
+    if ($targets.length === 0) {
+        toastr.info('All messages are already collapsed.');
+        return;
     }
+
+    $targets.each(function () { collapseMessage(this); });
+    toastr.success(
+        $targets.length + ($targets.length === 1
+            ? ' message collapsed.'
+            : ' messages collapsed.')
+    );
+}
+
+export function handleExpandAllClick() {
+    // Берём только свёрнутые сообщения
+    const $targets = $('.mes.' + collapsedClass);
+
+    if ($targets.length === 0) {
+        toastr.info('All messages are already expanded.');
+        return;
+    }
+
+    $targets.each(function () { expandMessage(this); });
+    toastr.success(
+        $targets.length + ($targets.length === 1
+            ? ' message expanded.'
+            : ' messages expanded.')
+    );
 }

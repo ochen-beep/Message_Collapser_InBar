@@ -1,35 +1,41 @@
 <div class="message-collapser-settings">
     <div class="inline-drawer">
         <div class="inline-drawer-toggle inline-drawer-header">
-            <b>Message Collapser Settings</b>
+            <b>Message Collapser</b>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content">
-            <!-- Master Enable/Disable Toggle -->
-            <div class="test-extension_block flex-container">
-                <input id="testExtensionMasterEnable" type="checkbox" />
-                <label for="testExtensionMasterEnable">Enable Message Collapser</label>
-            </div>
 
-            <!-- Status Indicator -->
-            <div class="test-extension_block flex-container">
-                 <p>Status: <span id="testExtensionStatusIndicator">Unknown</span></p>
+            <!-- Master Enable/Disable Toggle -->
+            <div class="mc-inbar-block flex-container">
+                <input id="mc-inbar-master-enable" type="checkbox" />
+                <label for="mc-inbar-master-enable">Enable Message Collapser</label>
             </div>
 
             <hr class="sysHR" />
 
-            <!-- Global Action Buttons (Placeholder for MVP) -->
-            <div class="test-extension_block flex-container">
-                <input id="testExtensionCollapseDisabled" class="menu_button" type="button" value="Collapse Disabled Messages" />
+            <!-- Action buttons: excluded messages -->
+            <div class="mc-inbar-block flex-container">
+                <input id="mc-inbar-collapse-disabled"
+                       class="menu_button"
+                       type="button"
+                       value="Collapse Excluded" />
+                <input id="mc-inbar-expand-disabled"
+                       class="menu_button"
+                       type="button"
+                       value="Expand Excluded" />
             </div>
-             <div class="test-extension_block flex-container">
-                <input id="testExtensionExpandDisabled" class="menu_button" type="button" value="Expand Disabled Messages" />
-            </div>
-             <div class="test-extension_block flex-container">
-                <input id="testExtensionExpandAll" class="menu_button" type="button" value="Expand All" />
-            </div>
-             <div class="test-extension_block flex-container">
-                <input id="testExtensionCollapseAll" class="menu_button" type="button" value="Collapse All" />
+
+            <!-- Action buttons: all messages -->
+            <div class="mc-inbar-block flex-container">
+                <input id="mc-inbar-collapse-all"
+                       class="menu_button"
+                       type="button"
+                       value="Collapse All" />
+                <input id="mc-inbar-expand-all"
+                       class="menu_button"
+                       type="button"
+                       value="Expand All" />
             </div>
 
             <hr class="sysHR" />

@@ -1,9 +1,6 @@
-// The main script for the Message Collapser
+// main.js — Message Collapser InBar
+// Точка входа: регистрация настроек, навешивание обработчиков событий ST.
 
-import { extension_settings, getContext, loadExtensionSettings } from "../../../extensions.js";
-import { saveSettingsDebounced } from "../../../../script.js";
-
-// Import from our new actions.js
 import {
     arrowClass,
     addCollapseArrowsToMessages,
@@ -15,91 +12,113 @@ import {
     handleCollapseAllClick,
     handleExpandAllClick,
     handleCollapseDisabledClick,
-    handleExpandDisabledClick
+    handleExpandDisabledClick,
 } from './actions.js';
 
-const extensionName = "Message_Collapser_InBar";
+const extensionName = 'Message_Collapser_InBar';
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 
-// Define default settings for the extension
 const defaultSettings = {
     isEnabled: false,
 };
 
-// Function to get or initialize settings
+// ─── Settings helpers ────────────────────────────────────────────────────────
+
 function getSettings() {
-    if (!extension_settings[extensionName]) {
-        extension_settings[extensionName] = structuredClone(defaultSettings);
+    // SillyTavern.getContext() — стабильный публичный API, не зависящий от
+    // внутренней структуры модулей ST (в отличие от прямых ES-импортов).
+    const { extensionSettings } = SillyTavern.getContext();
+    if (!extensionSettings[extensionName]) {
+        extensionSettings[extensionName] = structuredClone(defaultSettings);
     }
     for (const key in defaultSettings) {
-        if (extension_settings[extensionName][key] === undefined) {
-            extension_settings[extensionName][key] = defaultSettings[key];
+        if (extensionSettings[extensionName][key] === undefined) {
+            extensionSettings[extensionName][key] = defaultSettings[key];
         }
     }
-    return extension_settings[extensionName];
+    return extensionSettings[extensionName];
 }
 
-// Function to save settings
 function saveSettings() {
-    saveSettingsDebounced();
+    SillyTavern.getContext().saveSettingsDebounced();
 }
 
-// Function to update the status indicator text in the settings panel
-function updateStatusIndicator(isEnabled) {
-    const statusSpan = $("#testExtensionStatusIndicator");
-    if (statusSpan.length) {
-        statusSpan.text(isEnabled ? "Enabled" : "Disabled");
-    }
+// ─── UI helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Блокирует/разблокирует кнопки действий панели настроек.
+ * Кнопки бессмысленны, пока расширение выключено — стрелочек в чате нет.
+ */
+function setActionButtonsDisabled(disabled) {
+    $('#mc-inbar-collapse-all, #mc-inbar-expand-all, #mc-inbar-collapse-disabled, #mc-inbar-expand-disabled')
+        .prop('disabled', disabled);
 }
 
-// Handler for the Master Enable/Disable toggle
+// ─── Event handlers ──────────────────────────────────────────────────────────
+
 function handleMasterEnableToggleChange(event) {
     const settings = getSettings();
-    settings.isEnabled = Boolean($(event.target).prop("checked"));
+    settings.isEnabled = Boolean($(event.target).prop('checked'));
     saveSettings();
-    updateStatusIndicator(settings.isEnabled);
-    console.log("Message Collapser is now: " + (settings.isEnabled ? 'Enabled' : 'Disabled'));
+    setActionButtonsDisabled(!settings.isEnabled);
 
     if (settings.isEnabled) {
         addCollapseArrowsToMessages();
         autoCollapseHiddenMessages();
         startObserver();
     } else {
+        stopObserver();
         removeCollapseArrowsFromMessages();
     }
 }
 
-// Main initialization function
+// ─── Initialization ──────────────────────────────────────────────────────────
+
 jQuery(async () => {
+    const { eventSource, event_types } = SillyTavern.getContext();
+
     try {
         const settingsHtml = await $.get(`${extensionFolderPath}/settings_panel.html`);
-        $("#extensions_settings").append(settingsHtml);
+        $('#extensions_settings').append(settingsHtml);
+    } catch (error) {
+        console.error('[Message Collapser] Failed to load settings HTML:', error);
+        toastr.error('Message Collapser: не удалось загрузить панель настроек.');
+        return;
+    }
 
-        const settings = getSettings();
+    const settings = getSettings();
+    $('#mc-inbar-master-enable').prop('checked', settings.isEnabled);
+    setActionButtonsDisabled(!settings.isEnabled);
 
-        $("#testExtensionMasterEnable").prop("checked", settings.isEnabled);
-        updateStatusIndicator(settings.isEnabled);
+    // Навешиваем обработчики элементов панели
+    $('#mc-inbar-master-enable').on('change', handleMasterEnableToggleChange);
+    $('#mc-inbar-collapse-disabled').on('click', handleCollapseDisabledClick);
+    $('#mc-inbar-expand-disabled').on('click', handleExpandDisabledClick);
+    $('#mc-inbar-expand-all').on('click', handleExpandAllClick);
+    $('#mc-inbar-collapse-all').on('click', handleCollapseAllClick);
 
-        if (settings.isEnabled) {
+    // Делегированный обработчик для стрелочек — работает и для новых сообщений
+    $(document).on('click', '.' + arrowClass, handleArrowClick);
+
+    // APP_READY гарантирует, что чат уже загружен и отрендерен.
+    // Если ST уже готов к моменту подписки — событие стреляет синхронно.
+    eventSource.on(event_types.APP_READY, () => {
+        if (getSettings().isEnabled) {
             addCollapseArrowsToMessages();
-            // ST грузит чат асинхронно, поэтому откладываем установку
-            // начальных состояний на следующий тик — к тому моменту CSS уже применён
-            // и MutationObserver успел добавить кнопки к сообщениям
-            setTimeout(() => autoCollapseHiddenMessages(), 0);
+            autoCollapseHiddenMessages();
             startObserver();
         }
+    });
 
-        // Event Handlers
-        $("#testExtensionMasterEnable").on("change", handleMasterEnableToggleChange);
-        $("#testExtensionCollapseDisabled").on("click", handleCollapseDisabledClick);
-        $("#testExtensionExpandDisabled").on("click", handleExpandDisabledClick);
-        $("#testExtensionExpandAll").on("click", handleExpandAllClick);
-        $("#testExtensionCollapseAll").on('click', handleCollapseAllClick);
-
-        // Arrow click handler
-        $(document).on('click', '.' + arrowClass, handleArrowClick);
-    } catch (error) {
-        console.error("Error loading Message Collapser settings HTML or initializing:", error);
-        toastr.error("Failed to load Message Collapser UI. Check console for details.");
-    }
+    // CHAT_CHANGED стреляет при каждой смене персонажа/чата.
+    // ST пересоздаёт весь список .mes, поэтому стрелочки нужно добавить заново.
+    eventSource.on(event_types.CHAT_CHANGED, () => {
+        if (!getSettings().isEnabled) return;
+        // ST рендерит новые сообщения асинхронно после события,
+        // поэтому добавляем небольшую задержку.
+        setTimeout(() => {
+            addCollapseArrowsToMessages();
+            autoCollapseHiddenMessages();
+        }, 150);
+    });
 });

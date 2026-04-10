@@ -1,11 +1,12 @@
 {
-    "display_name": "Message_Collapser_InBar",
+    "display_name": "Message Collapser InBar",
     "loading_order": 9,
     "requires": [],
     "optional": [],
     "js": "main.js",
+    "css": "style.css",
     "author": "ochen-beep",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "homePage": "https://github.com/ochen-beep/Message_Collapser_InBar",
-    "css": "style.css"
+    "description": "Adds a collapse/expand arrow button to each chat message. Supports auto-collapsing messages excluded from the prompt."
 }

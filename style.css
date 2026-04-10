@@ -1,27 +1,45 @@
-/* Message Collapser — кнопка внутри панели действий сообщения */
+/* Message Collapser InBar — стили кнопки и состояния сообщения */
 
-/* Кнопка сворачивания — выглядит как стандартная кнопка ST */
+/*
+ * Кнопка-стрелочка живёт внутри .mes_buttons.
+ * На десктопе .mes_buttons появляется при hover — это стандартное поведение ST.
+ *
+ * На мобильных устройствах (Chromium Android, Яндекс.Браузер, Termux)
+ * hover недоступен, поэтому панель кнопок не показывается автоматически.
+ * Решение: стрелочка всегда слегка видна (низкая opacity) и не требует
+ * hover для обнаружения. При тапе на сообщение ST показывает .mes_buttons
+ * целиком — тогда стрелочка становится полностью видимой.
+ */
 .message-collapser-arrow {
     cursor: pointer;
-    opacity: 0.7;
+    /* Всегда видима, даже без hover — важно для мобильных */
+    opacity: 0.45;
     transition: opacity 0.15s ease, color 0.15s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
+/* Hover-состояние (десктоп) */
 .message-collapser-arrow:hover {
     opacity: 1;
     color: var(--SmartThemeBodyColor, #fff);
 }
 
-/* Когда сообщение свёрнуто — иконка слегка подсвечена для индикации */
+/*
+ * Когда сообщение свёрнуто — стрелочка подсвечена акцентным цветом,
+ * чтобы было видно, что тут есть скрытый контент.
+ */
 .message-collapser-message-collapsed .message-collapser-arrow {
     opacity: 1;
     color: var(--SmartThemeQuoteColor, #aaa);
 }
 
-/* Скрыть текст сообщения (collapsed state) */
+/*
+ * Скрываем текст свёрнутого сообщения.
+ * !important нужен, чтобы переопределить возможные inline-стили ST.
+ * JS-логика управляет только CSS-классом на .mes — .hide()/.show() не используются.
+ */
 .message-collapser-message-collapsed .mes_text {
     display: none !important;
 }
