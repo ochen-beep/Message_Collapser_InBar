@@ -18,7 +18,7 @@ import {
     handleExpandDisabledClick
 } from './actions.js';
 
-const extensionName = "Message Collapser InBar";
+const extensionName = "Message_Collapser_InBar";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 
 // Define default settings for the extension
