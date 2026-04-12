@@ -1,6 +1,6 @@
 // The main script for the Message Collapser
 
-import { extension_settings, getContext, loadExtensionSettings } from "../../../extensions.js";
+import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 
 // Import from our new actions.js
@@ -10,7 +10,6 @@ import {
     removeCollapseArrowsFromMessages,
     autoCollapseHiddenMessages,
     startObserver,
-    stopObserver,
     handleArrowClick,
     handleCollapseAllClick,
     handleExpandAllClick,
@@ -24,6 +23,7 @@ const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 // Define default settings for the extension
 const defaultSettings = {
     isEnabled: false,
+    collapsedMessages: {},
 };
 
 // Function to get or initialize settings
@@ -33,7 +33,7 @@ function getSettings() {
     }
     for (const key in defaultSettings) {
         if (extension_settings[extensionName][key] === undefined) {
-            extension_settings[extensionName][key] = defaultSettings[key];
+            extension_settings[extensionName][key] = structuredClone(defaultSettings[key]);
         }
     }
     return extension_settings[extensionName];
@@ -62,7 +62,7 @@ function handleMasterEnableToggleChange(event) {
 
     if (settings.isEnabled) {
         addCollapseArrowsToMessages();
-        autoCollapseHiddenMessages();
+        setTimeout(() => autoCollapseHiddenMessages(), 0);
         startObserver();
     } else {
         removeCollapseArrowsFromMessages();

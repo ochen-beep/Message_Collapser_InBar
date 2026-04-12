@@ -1,9 +1,48 @@
 // actions.js - Handles message manipulation and UI actions for Message_Collapser
 
+import { extension_settings, getContext } from "../../../extensions.js";
+import { saveSettingsDebounced } from "../../../../script.js";
+
+// Must match extensionName in main.js
+const extensionName = "Message_Collapser_InBar";
+
 export const arrowClass = 'message-collapser-arrow';
 export const collapsedClass = 'message-collapser-message-collapsed';
 
+// ---------------------------------------------------------------------------
+// Helpers: persist collapse state in extension_settings
+// ---------------------------------------------------------------------------
+
+function getCurrentChatId() {
+    return getContext().chatId ?? null;
+}
+
+function isManuallyCollapsed(chatId, mesId) {
+    return extension_settings[extensionName]?.collapsedMessages?.[chatId]?.includes(mesId) ?? false;
+}
+
+function saveCollapsedState(chatId, mesId, collapsed) {
+    if (!chatId) return;
+    const settings = extension_settings[extensionName];
+    if (!settings.collapsedMessages) settings.collapsedMessages = {};
+    if (!settings.collapsedMessages[chatId]) settings.collapsedMessages[chatId] = [];
+
+    const list = settings.collapsedMessages[chatId];
+    const idx = list.indexOf(mesId);
+
+    if (collapsed && idx === -1) {
+        list.push(mesId);
+        saveSettingsDebounced();
+    } else if (!collapsed && idx !== -1) {
+        list.splice(idx, 1);
+        saveSettingsDebounced();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Function to add collapse/expand arrows to messages
+// ---------------------------------------------------------------------------
+
 export function addCollapseArrowsToMessages() {
     console.log("Message Collapser: Adding collapse arrows.");
     $('.mes').each(function() {
@@ -78,10 +117,18 @@ export function handleArrowClick(event) {
     messageText.toggle();
     message.toggleClass(collapsedClass);
 
-    if (messageText.is(':visible')) {
-        icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-    } else {
+    const isNowCollapsed = !messageText.is(':visible');
+    if (isNowCollapsed) {
         icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+    } else {
+        icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+    }
+
+    // Persist the new state
+    const mesId = parseInt(message.attr('mesid'));
+    const chatId = getCurrentChatId();
+    if (!isNaN(mesId) && chatId) {
+        saveCollapsedState(chatId, mesId, isNowCollapsed);
     }
 }
 
@@ -105,14 +152,19 @@ function isMessageExcludedFromPrompt(mesElement) {
 /**
  * Устанавливает начальное состояние одного сообщения:
  * - исключено из промпта → свернуть
- * - обычное → развернуть (на случай если что-то его уже свернуло)
+ * - вручную свёрнуто пользователем (сохранено в settings) → свернуть
+ * - иначе → развернуть
  */
 function applyInitialCollapseState(mesElement) {
     const message = $(mesElement);
     const messageText = message.find('.mes_text');
     const icon = message.find('.' + arrowClass + ' i');
 
-    if (isMessageExcludedFromPrompt(mesElement)) {
+    const chatId = getCurrentChatId();
+    const mesId = parseInt(message.attr('mesid'));
+    const manuallyCollapsed = !isNaN(mesId) && !!chatId && isManuallyCollapsed(chatId, mesId);
+
+    if (isMessageExcludedFromPrompt(mesElement) || manuallyCollapsed) {
         messageText.hide();
         message.addClass(collapsedClass);
         if (icon.length) icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
@@ -125,7 +177,7 @@ function applyInitialCollapseState(mesElement) {
 
 /**
  * Устанавливает начальное состояние всех сообщений в чате:
- * исключённые из промпта сворачиваются, остальные разворачиваются.
+ * исключённые из промпта и вручную свёрнутые сворачиваются, остальные разворачиваются.
  * Вызывается после addCollapseArrowsToMessages при загрузке/смене чата.
  */
 export function autoCollapseHiddenMessages() {
@@ -216,6 +268,14 @@ export function handleExpandAllClick() {
             count++;
         }
     });
+
+    // Clear saved manual collapse state for this chat
+    const chatId = getCurrentChatId();
+    if (chatId && extension_settings[extensionName]?.collapsedMessages) {
+        extension_settings[extensionName].collapsedMessages[chatId] = [];
+        saveSettingsDebounced();
+    }
+
     if (count > 0) {
         toastr.success(count + (count === 1 ? " message expanded." : " messages expanded."));
     } else {
@@ -226,13 +286,15 @@ export function handleExpandAllClick() {
 export function handleCollapseAllClick() {
     console.log("Message Collapser: Collapsing all messages.");
     let count = 0;
+    const collapsedIds = [];
+
     $('.mes').each(function() {
         const message = $(this);
-        if (message.find('.mes_text').is(':visible') || !message.hasClass(collapsedClass)) {
-            const messageText = message.find('.mes_text');
-            const arrowSpan = message.find('.' + arrowClass);
-            const icon = arrowSpan.find('i');
+        const messageText = message.find('.mes_text');
+        const arrowSpan = message.find('.' + arrowClass);
+        const icon = arrowSpan.find('i');
 
+        if (messageText.is(':visible') || !message.hasClass(collapsedClass)) {
             messageText.hide();
             message.addClass(collapsedClass);
             if (arrowSpan.length && icon.length) {
@@ -240,7 +302,21 @@ export function handleCollapseAllClick() {
             }
             count++;
         }
+
+        // Collect all mesids regardless — after this action every message is collapsed
+        const mesId = parseInt(message.attr('mesid'));
+        if (!isNaN(mesId)) collapsedIds.push(mesId);
     });
+
+    // Persist the full collapsed list for this chat
+    const chatId = getCurrentChatId();
+    if (chatId) {
+        const settings = extension_settings[extensionName];
+        if (!settings.collapsedMessages) settings.collapsedMessages = {};
+        settings.collapsedMessages[chatId] = collapsedIds;
+        saveSettingsDebounced();
+    }
+
     if (count > 0) {
         toastr.success(count + (count === 1 ? " message collapsed." : " messages collapsed."));
     } else {
