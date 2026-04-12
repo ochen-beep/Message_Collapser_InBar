@@ -4,11 +4,52 @@
 export const arrowClass    = 'message-collapser-arrow';
 export const collapsedClass = 'message-collapser-message-collapsed';
 
+// Key inside chatMetadata where we store collapsed message IDs.
+var STORAGE_KEY = 'message_collapser_collapsed';
+
+// --- Persistence (chatMetadata) ----------------------------------------------
+
+/**
+ * Returns the collapse-state map for the current chat.
+ * Shape: { [mesId: string]: true }
+ * Stored in chat_metadata which ST persists inside the .jsonl chat file.
+ */
+function getCollapseMap() {
+    var ctx = SillyTavern.getContext();
+    if (!ctx.chat_metadata) return {};
+    if (!ctx.chat_metadata[STORAGE_KEY]) {
+        ctx.chat_metadata[STORAGE_KEY] = {};
+    }
+    return ctx.chat_metadata[STORAGE_KEY];
+}
+
+/**
+ * Saves the current DOM collapse state of every .mes into chatMetadata.
+ * Called after every individual collapse/expand action so state is always fresh.
+ */
+function saveCollapseState() {
+    var ctx = SillyTavern.getContext();
+    if (!ctx.chat_metadata) return;
+
+    var map = {};
+    $('.mes').each(function () {
+        var id = $(this).attr('mesid');
+        if (id !== undefined && $(this).hasClass(collapsedClass)) {
+            map[id] = true;
+        }
+    });
+    ctx.chat_metadata[STORAGE_KEY] = map;
+
+    // Persist immediately — ST debounces internally.
+    if (typeof ctx.saveMetadata === 'function') {
+        ctx.saveMetadata();
+    }
+}
+
 // --- Arrow element factory ---------------------------------------------------
 
 /**
  * Creates the arrow button DOM element.
- * Extracted to avoid duplicating markup in multiple places.
  * NOTE: Using string concatenation intentionally — template literals with
  * backticks get corrupted when committed via the GitHub API.
  */
@@ -22,14 +63,14 @@ function createArrowElement() {
 
 /**
  * Injects an arrow into a specific message element if not already present.
- * @param {HTMLElement|jQuery} mesElement - the .mes element
+ * @param {HTMLElement|jQuery} mesElement
  */
 function injectArrow(mesElement) {
-    const message = $(mesElement);
+    var message = $(mesElement);
     if (message.find('.' + arrowClass).length > 0) return;
 
-    const arrow = createArrowElement();
-    const buttonsContainer = message.find('.mes_buttons');
+    var arrow = createArrowElement();
+    var buttonsContainer = message.find('.mes_buttons');
     if (buttonsContainer.length) {
         buttonsContainer.prepend(arrow);
     } else {
@@ -41,37 +82,42 @@ function injectArrow(mesElement) {
 
 /**
  * Determines whether a message is excluded from the prompt.
- *
- * ST sets the attribute is_system="true" on .mes when the message
- * is disabled via the "Exclude from prompt" button.
- * Checking the attribute directly is more reliable than reading computed CSS
- * (which depends on specific theme/ST version rules).
- *
- * @param {HTMLElement|jQuery} mesElement
- * @returns {boolean}
+ * ST sets is_system="true" on .mes when the message is disabled.
  */
 function isMessageExcludedFromPrompt(mesElement) {
     return $(mesElement).attr('is_system') === 'true';
 }
 
 /**
- * Visually collapses a single message.
- * Visibility is controlled by CSS class only — jQuery .hide()/.show() are
- * not needed: the class + style.css rule handle everything.
+ * Visually collapses a single message and saves state.
  */
 function collapseMessage(mesElement) {
-    const message = $(mesElement);
+    var message = $(mesElement);
     message.addClass(collapsedClass);
     message.find('.' + arrowClass + ' i')
            .removeClass('fa-chevron-up')
            .addClass('fa-chevron-down');
+    saveCollapseState();
 }
 
 /**
- * Visually expands a single message.
+ * Visually expands a single message and saves state.
  */
 function expandMessage(mesElement) {
-    const message = $(mesElement);
+    var message = $(mesElement);
+    message.removeClass(collapsedClass);
+    message.find('.' + arrowClass + ' i')
+           .removeClass('fa-chevron-down')
+           .addClass('fa-chevron-up');
+    saveCollapseState();
+}
+
+/**
+ * Expands a message WITHOUT touching chatMetadata.
+ * Used internally when wiping all arrows (disable extension).
+ */
+function expandMessageSilent(mesElement) {
+    var message = $(mesElement);
     message.removeClass(collapsedClass);
     message.find('.' + arrowClass + ' i')
            .removeClass('fa-chevron-down')
@@ -79,16 +125,51 @@ function expandMessage(mesElement) {
 }
 
 /**
- * Sets the initial state of a single message:
- * - excluded from prompt -> collapse
- * - normal -> expand
+ * Restores saved collapse state from chatMetadata, then auto-collapses
+ * any excluded messages that don't already have a saved state.
+ *
+ * Priority:
+ *   1. If the message has an explicit saved state  -> use it.
+ *   2. If excluded from prompt and no saved state  -> collapse.
+ *   3. Otherwise                                   -> expand.
+ *
+ * This ensures:
+ *   - Manual collapses survive chat reload / CHAT_CHANGED.
+ *   - Newly excluded messages are auto-collapsed on first encounter.
+ *   - Manually expanded excluded messages stay expanded.
  */
-function applyInitialCollapseState(mesElement) {
-    if (isMessageExcludedFromPrompt(mesElement)) {
-        collapseMessage(mesElement);
-    } else {
-        expandMessage(mesElement);
-    }
+export function restoreAndAutoCollapse() {
+    var map = getCollapseMap();
+    var hasAnyMap = Object.keys(map).length > 0;
+
+    $('.mes').each(function () {
+        var id = $(this).attr('mesid');
+        var savedCollapsed = (id !== undefined) ? (map[id] === true) : undefined;
+
+        if (savedCollapsed === true) {
+            // Explicit saved: collapsed
+            $(this).addClass(collapsedClass);
+            $(this).find('.' + arrowClass + ' i')
+                   .removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        } else if (savedCollapsed === false || (id !== undefined && id in map)) {
+            // Explicit saved: expanded (key present but value not true)
+            $(this).removeClass(collapsedClass);
+            $(this).find('.' + arrowClass + ' i')
+                   .removeClass('fa-chevron-down').addClass('fa-chevron-up');
+        } else {
+            // No saved state for this message:
+            // auto-collapse excluded, expand everything else.
+            if (isMessageExcludedFromPrompt(this)) {
+                $(this).addClass(collapsedClass);
+                $(this).find('.' + arrowClass + ' i')
+                       .removeClass('fa-chevron-up').addClass('fa-chevron-down');
+            } else {
+                $(this).removeClass(collapsedClass);
+                $(this).find('.' + arrowClass + ' i')
+                       .removeClass('fa-chevron-down').addClass('fa-chevron-up');
+            }
+        }
+    });
 }
 
 // --- Public API --------------------------------------------------------------
@@ -100,55 +181,62 @@ export function addCollapseArrowsToMessages() {
 
 /** Removes arrows, expands all collapsed messages, stops the observer. */
 export function removeCollapseArrowsFromMessages() {
-    $('.' + collapsedClass).each(function () { expandMessage(this); });
+    $('.' + collapsedClass).each(function () { expandMessageSilent(this); });
     $('.' + arrowClass).remove();
     stopObserver();
 }
 
 /**
- * Sets the initial state of all messages:
- * excluded from prompt -> collapsed, others -> expanded.
- * Called after addCollapseArrowsToMessages on load/chat change.
+ * Legacy alias — kept so existing callers don't break.
+ * Now simply delegates to restoreAndAutoCollapse.
  */
 export function autoCollapseHiddenMessages() {
-    $('.mes').each(function () { applyInitialCollapseState(this); });
+    restoreAndAutoCollapse();
 }
 
 // --- MutationObserver --------------------------------------------------------
 
-let _collapserObserver = null;
+var _collapserObserver = null;
 
 /**
  * Starts a MutationObserver on the chat container.
  *
- * Watches for two types of mutations:
- * 1. childList  - new .mes elements (incoming / streaming messages).
- *    -> inject arrow, apply initial state.
- * 2. attributes / is_system - user clicked "Exclude from prompt" on an
- *    existing message.
- *    -> immediately collapse or expand it.
+ * 1. childList  — new .mes added (incoming/streaming messages).
+ *    -> inject arrow, apply initial state (restore or auto-collapse).
+ * 2. attributes / is_system — user clicked "Exclude from prompt".
+ *    -> only collapse if now excluded AND not already manually expanded.
+ *       Never force-expand on attribute change (user may have collapsed it manually).
  */
 export function startObserver() {
     if (_collapserObserver) return;
-    const chat = document.getElementById('chat');
+    var chat = document.getElementById('chat');
     if (!chat) return;
 
     _collapserObserver = new MutationObserver(function (mutations) {
         for (var i = 0; i < mutations.length; i++) {
             var mutation = mutations[i];
 
-            // New messages
             if (mutation.type === 'childList') {
                 for (var j = 0; j < mutation.addedNodes.length; j++) {
                     var node = mutation.addedNodes[j];
                     if (node.nodeType === 1 && node.classList && node.classList.contains('mes')) {
                         injectArrow(node);
-                        applyInitialCollapseState(node);
+                        // New message: check saved state, then fall back to auto-collapse logic.
+                        var id = $(node).attr('mesid');
+                        var map = getCollapseMap();
+                        if (id !== undefined && map[id] === true) {
+                            $(node).addClass(collapsedClass);
+                            $(node).find('.' + arrowClass + ' i')
+                                   .removeClass('fa-chevron-up').addClass('fa-chevron-down');
+                        } else if (isMessageExcludedFromPrompt(node)) {
+                            $(node).addClass(collapsedClass);
+                            $(node).find('.' + arrowClass + ' i')
+                                   .removeClass('fa-chevron-up').addClass('fa-chevron-down');
+                        }
                     }
                 }
             }
 
-            // is_system attribute changed on an existing message
             if (mutation.type === 'attributes') {
                 var target = mutation.target;
                 var mes = null;
@@ -157,7 +245,18 @@ export function startObserver() {
                 } else if (typeof target.closest === 'function') {
                     mes = target.closest('.mes');
                 }
-                if (mes) applyInitialCollapseState(mes);
+                if (mes && isMessageExcludedFromPrompt(mes)) {
+                    // Message just got excluded -> collapse it (unless user had
+                    // already saved it as expanded, which would be unusual but possible).
+                    var mesId = $(mes).attr('mesid');
+                    var colMap = getCollapseMap();
+                    // Only auto-collapse if there's no explicit saved=false entry.
+                    if (mesId === undefined || colMap[mesId] !== false) {
+                        collapseMessage(mes);
+                    }
+                }
+                // Note: we intentionally do NOT auto-expand when is_system flips back
+                // to false — the user may have manually collapsed it.
             }
         }
     });
