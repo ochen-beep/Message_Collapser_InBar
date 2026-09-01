@@ -1,38 +1,121 @@
 <div class="message-collapser-settings">
     <div class="inline-drawer">
         <div class="inline-drawer-toggle inline-drawer-header">
-            <b>Message Collapser Settings</b>
-            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+            <strong data-i18n="mc_settings_title">Сворачивание сообщений</strong>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down" aria-hidden="true"></div>
         </div>
         <div class="inline-drawer-content">
-            <!-- Master Enable/Disable Toggle -->
-            <div class="test-extension_block flex-container">
-                <input id="testExtensionMasterEnable" type="checkbox" />
-                <label for="testExtensionMasterEnable">Enable Message Collapser</label>
+
+            <!-- Master toggle: switch + label + ON/OFF badge.
+                 Нативный checkbox остаётся в DOM (семантика, клавиатура),
+                 визуально заменяется кастомным toggle-track. -->
+            <div class="mc-block flex-container">
+                <label class="mc-toggle" for="mcMasterEnable">
+                    <input id="mcMasterEnable" type="checkbox" />
+                    <span class="mc-toggle-track" aria-hidden="true"></span>
+                </label>
+                <label for="mcMasterEnable" data-i18n="mc_enable_label">Включить сворачивание сообщений</label>
+                <span class="mc-status-badge" aria-hidden="true">
+                    <span class="mc-badge-on">ON</span>
+                    <span class="mc-badge-off">OFF</span>
+                </span>
             </div>
 
-            <!-- Status Indicator -->
-            <div class="test-extension_block flex-container">
-                 <p>Status: <span id="testExtensionStatusIndicator">Unknown</span></p>
+            <!-- Body: dimmed when master toggle is off -->
+            <div class="mc-settings-body">
+
+            <!-- View -->
+            <div class="mc-section">
+                <h4 class="mc-section-title" data-i18n="mc_section_view">Вид</h4>
+                <div class="mc-block flex-container">
+                    <label for="mcPreviewMode" data-i18n="mc_preview_mode_label">Режим свёрнутого сообщения:</label>
+                    <select id="mcPreviewMode">
+                        <option value="hide" data-i18n="mc_preview_mode_hide">Скрыть полностью</option>
+                        <option value="preview" data-i18n="mc_preview_mode_preview">Показать превью строк</option>
+                    </select>
+                </div>
+                <!-- Nested preview lines — shown only when preview mode is active -->
+                <div class="mc-block flex-container mc-nested mc-preview-lines-field">
+                    <label for="mcPreviewLines" data-i18n="mc_preview_lines_label">Строк превью:</label>
+                    <input id="mcPreviewLines" type="number" min="1" max="10" value="2" />
+                </div>
             </div>
 
-            <hr class="sysHR" />
+            <!-- Automation -->
+            <div class="mc-section">
+                <h4 class="mc-section-title" data-i18n="mc_section_auto">Автоматика</h4>
+                <div class="mc-block flex-container">
+                    <label class="mc-checkbox" for="mcAutoCollapseByLength">
+                        <input id="mcAutoCollapseByLength" type="checkbox" />
+                        <span class="mc-checkbox-box" aria-hidden="true"></span>
+                        <span data-i18n="mc_auto_collapse_length_label">Свернуть, если длиннее</span>
+                    </label>
+                </div>
+                <!-- Nested threshold — shown only when the length rule is enabled -->
+                <div class="mc-block flex-container mc-nested mc-length-field">
+                    <input id="mcLengthThreshold" type="number" min="100" value="1000" />
+                    <span data-i18n="mc_chars_suffix">символов</span>
+                </div>
+                <div class="mc-block flex-container">
+                    <label class="mc-checkbox" for="mcAutoCollapseByAge">
+                        <input id="mcAutoCollapseByAge" type="checkbox" />
+                        <span class="mc-checkbox-box" aria-hidden="true"></span>
+                        <span data-i18n="mc_auto_collapse_age_label">Свернуть, если старше</span>
+                    </label>
+                </div>
+                <!-- Nested threshold — shown only when the age rule is enabled -->
+                <div class="mc-block flex-container mc-nested mc-age-field">
+                    <input id="mcAgeThreshold" type="number" min="1" value="20" />
+                    <span data-i18n="mc_messages_suffix">сообщений от конца</span>
+                </div>
+            </div>
 
-            <!-- Global Action Buttons (Placeholder for MVP) -->
-            <div class="test-extension_block flex-container">
-                <input id="testExtensionCollapseDisabled" class="menu_button" type="button" value="Collapse Disabled Messages" />
-            </div>
-             <div class="test-extension_block flex-container">
-                <input id="testExtensionExpandDisabled" class="menu_button" type="button" value="Expand Disabled Messages" />
-            </div>
-             <div class="test-extension_block flex-container">
-                <input id="testExtensionExpandAll" class="menu_button" type="button" value="Expand All" />
-            </div>
-             <div class="test-extension_block flex-container">
-                <input id="testExtensionCollapseAll" class="menu_button" type="button" value="Collapse All" />
+            <!-- Manual control -->
+            <div class="mc-section">
+                <h4 class="mc-section-title" data-i18n="mc_section_manual">Ручное управление</h4>
+
+                <div class="mc-action-row">
+                    <span data-i18n="mc_target_all">Все сообщения</span>
+                    <div class="mc-action-btns">
+                        <button type="button" id="mcCollapseAll" class="menu_button mc-text-btn" data-i18n="mc_action_collapse">Свернуть</button>
+                        <button type="button" id="mcExpandAll" class="menu_button mc-text-btn" data-i18n="mc_action_expand">Развернуть</button>
+                    </div>
+                </div>
+
+                <div class="mc-action-row">
+                    <span data-i18n="mc_target_hidden">Скрытые из промпта</span>
+                    <div class="mc-action-btns">
+                        <button type="button" id="mcCollapseHidden" class="menu_button mc-text-btn" data-i18n="mc_action_collapse">Свернуть</button>
+                        <button type="button" id="mcExpandHidden" class="menu_button mc-text-btn" data-i18n="mc_action_expand">Развернуть</button>
+                    </div>
+                </div>
+
+                <div class="mc-action-row">
+                    <span data-i18n="mc_target_user">Пользователь</span>
+                    <div class="mc-action-btns">
+                        <button type="button" id="mcCollapseUser" class="menu_button mc-text-btn" data-i18n="mc_action_collapse">Свернуть</button>
+                        <button type="button" id="mcExpandUser" class="menu_button mc-text-btn" data-i18n="mc_action_expand">Развернуть</button>
+                    </div>
+                </div>
+
+                <div class="mc-action-row">
+                    <span data-i18n="mc_target_character">Персонаж</span>
+                    <div class="mc-action-btns">
+                        <button type="button" id="mcCollapseCharacter" class="menu_button mc-text-btn" data-i18n="mc_action_collapse">Свернуть</button>
+                        <button type="button" id="mcExpandCharacter" class="menu_button mc-text-btn" data-i18n="mc_action_expand">Развернуть</button>
+                    </div>
+                </div>
+
+                <div class="mc-action-row">
+                    <span data-i18n="mc_target_system">Система</span>
+                    <div class="mc-action-btns">
+                        <button type="button" id="mcCollapseSystem" class="menu_button mc-text-btn" data-i18n="mc_action_collapse">Свернуть</button>
+                        <button type="button" id="mcExpandSystem" class="menu_button mc-text-btn" data-i18n="mc_action_expand">Развернуть</button>
+                    </div>
+                </div>
             </div>
 
-            <hr class="sysHR" />
+            </div><!-- /mc-settings-body -->
 
         </div>
     </div>

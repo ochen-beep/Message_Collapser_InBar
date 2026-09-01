@@ -1,66 +1,199 @@
-// actions.js - Handles message manipulation and UI actions for Message_Collapser
-
 import { extension_settings, getContext } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 
-// Must match extensionName in main.js
-const extensionName = "Message_Collapser_InBar";
+import {
+    buildSettings,
+    getStableMessageKey as getStableMessageKeyFromState,
+    isManuallyCollapsed as isManuallyCollapsedFromState,
+    isManuallyExpanded as isManuallyExpandedFromState,
+    saveManualToggleState as saveManualToggleStateToState,
+    setMessagesBulkToggle as setMessagesBulkToggleInState,
+    clearManualStateForChat,
+    migrateLegacyCollapsedState as migrateLegacyCollapsedStateInPlace,
+    migratePositionalKeysIfNeeded as migratePositionalKeysInPlace,
+} from './state.js';
+import { t } from './i18n.js';
+
+// Единственный источник имени расширения; main.js импортирует отсюда.
+export const extensionName = "Message_Collapser_InBar";
 
 export const arrowClass = 'message-collapser-arrow';
 export const collapsedClass = 'message-collapser-message-collapsed';
+export const previewClass = 'message-collapser-preview';
 
-// ---------------------------------------------------------------------------
-// Helpers: persist collapse state in extension_settings
-// ---------------------------------------------------------------------------
+// Пространство имён для делегированных обработчиков, чтобы можно было безопасно
+// снять их (и защититься от повторной инициализации).
+export const eventNamespace = '.mc';
+
+// Настройки: источник истины свёрнутости — CSS-класс (см. style.css,
+// .message-collapser-message-collapsed .mes_text { display:none !important }).
+// Inline .hide()/.show() не используем: класс достаточно, а чтений :visible
+// (layout-read) удаётся избежать целиком.
+
+// Единая точка доступа к настройкам расширения с авто-инициализацией дефолтов.
+// Чистая логика инициализации/миграции вынесена в state.js для тестируемости.
+export function getSettings() {
+    return buildSettings(extension_settings, extensionName);
+}
 
 function getCurrentChatId() {
     return getContext().chatId ?? null;
 }
 
-function isManuallyCollapsed(chatId, mesId) {
-    return extension_settings[extensionName]?.collapsedMessages?.[chatId]?.includes(mesId) ?? false;
+// Стабильный ключ сообщения. mesid — позиция в массиве chat, она плывёт при
+// удалении/переупорядочивании: удаление сообщения №3 сдвигает все свёрнутости
+// ниже на одну позицию (молчаливая порча данных). send_date — timestamp,
+// проставляемый ST при рождении сообщения (getMessageTimeStamp) и не
+// меняющийся до конца его жизни; он уникален в пределах чата. Ключуем по нему.
+// Если send_date неожиданно отсутствует — возвращаем null и НЕ персистим
+// (только визуальный эффект в текущей сессии), чтобы не плодить мусор.
+function getStableMessageKey(mesElement) {
+    return getStableMessageKeyFromState(getContext().chat, mesElement);
 }
 
-function saveCollapsedState(chatId, mesId, collapsed) {
-    if (!chatId) return;
-    const settings = extension_settings[extensionName];
-    if (!settings.collapsedMessages) settings.collapsedMessages = {};
-    if (!settings.collapsedMessages[chatId]) settings.collapsedMessages[chatId] = [];
+function isManuallyCollapsed(chatId, key) {
+    return isManuallyCollapsedFromState(getSettings()?.collapsedMessages, chatId, key);
+}
 
-    const list = settings.collapsedMessages[chatId];
-    const idx = list.indexOf(mesId);
+function isManuallyExpanded(chatId, key) {
+    return isManuallyExpandedFromState(getSettings()?.manuallyExpandedMessages, chatId, key);
+}
 
-    if (collapsed && idx === -1) {
-        list.push(mesId);
-        saveSettingsDebounced();
-    } else if (!collapsed && idx !== -1) {
-        list.splice(idx, 1);
-        saveSettingsDebounced();
+// Сохраняет ручное состояние сворачивания/разворачивания одного сообщения.
+// При collapse сообщение убирается из manuallyExpanded, при expand — из collapsedMessages,
+// чтобы ручной выбор всегда переопределял авто-сворачивание.
+function saveManualToggleState(chatId, key, collapsed) {
+    const changed = saveManualToggleStateToState(getSettings(), chatId, key, collapsed);
+    if (changed) saveSettingsDebounced();
+}
+
+// Разовая миграция устаревшего формата { chatId: [ids] } → { chatId: { id: true } }.
+export function migrateLegacyCollapsedState() {
+    migrateLegacyCollapsedStateInPlace(getSettings().collapsedMessages);
+}
+
+// Ленивая миграция позиционных ключей (mesid) → стабильных (send_date) per-chat.
+// Невозможно разрешить mesid→send_date без загруженного чата, поэтому делаем это
+// здесь, когда нужный чат открыт и getContext().chat доступен. Срабатывает один
+// раз на чат: после конвертации ключи перестают быть «числовыми».
+function migratePositionalKeysIfNeeded(chatId) {
+    const changed = migratePositionalKeysInPlace(
+        getSettings()?.collapsedMessages,
+        getContext().chat,
+        chatId
+    );
+    if (changed) saveSettingsDebounced();
+}
+
+// DOM-примитивы
+
+// ST фильтрует сообщения по chat[mesId].is_system и зеркалирует его в атрибут
+// is_system элемента .mes в hideChatMessageRange (см. .mes:not([is_system="true"])
+// в самом script.js). Прямой getAttribute — дешёвый (без reflow) источник истины,
+// пришедший на смену хрупкой эвристике через computed display кнопки .mes_unhide.
+function isMessageHiddenFromPrompt(mesElement) {
+    return mesElement.getAttribute('is_system') === 'true';
+}
+
+// Идемпотентно добавляет стрелку-кнопку в панель действий сообщения.
+// Класс расширения уникален, поэтому .find() безопасен и покрывает оба варианта
+// размещения (внутри .mes_buttons или напрямую в .mes).
+// Элемент имеет role/tabindex/aria для доступности (см. handleArrowKeydown).
+function ensureArrow($message) {
+    let $arrow = $message.find('.' + arrowClass).first();
+    if ($arrow.length === 0) {
+        $arrow = $(`<div class="mes_button ${arrowClass}" role="button" tabindex="0" aria-expanded="true" title="${t('mc_arrow_title')}"><i class="fas fa-chevron-up"></i></div>`);
+        const $buttons = $message.find('.mes_buttons');
+        ($buttons.length ? $buttons : $message).prepend($arrow);
+    }
+    return $arrow;
+}
+
+// Устанавливает свёрнутое состояние через класс + иконку + ARIA. Единственная точка записи.
+// fa-chevron-up = развёрнуто («свернуть»), fa-chevron-down = свёрнуто («развернуть»).
+// Если включён режим предпросмотра, свёрнутые сообщения показывают первые N строк.
+function applyCollapsedState($message, $arrow, collapsed) {
+    const usePreview = collapsed && getSettings().previewMode === 'preview';
+    $message.toggleClass(collapsedClass, collapsed);
+    $message.toggleClass(previewClass, usePreview);
+    if ($arrow.length) {
+        $arrow.attr('aria-expanded', collapsed ? 'false' : 'true')
+              .find('i').toggleClass('fa-chevron-up', !collapsed)
+                        .toggleClass('fa-chevron-down', collapsed);
     }
 }
 
-// ---------------------------------------------------------------------------
-// Function to add collapse/expand arrows to messages
-// ---------------------------------------------------------------------------
+// Авто-сворачивание по длине сообщения и/или возрасту (отступ от конца чата).
+// Не персистится — вычисляется при каждой отрисовке.
+function shouldAutoCollapse(mesElement) {
+    const settings = getSettings();
+    if (!settings.autoCollapseByLength && !settings.autoCollapseByAge) return false;
 
-export function addCollapseArrowsToMessages() {
-    console.log("Message Collapser: Adding collapse arrows.");
-    $('.mes').each(function() {
-        const message = $(this);
-        if (message.find('.' + arrowClass).length === 0) {
-            const arrowElement = $('<div class="mes_button ' + arrowClass + '" title="Свернуть/развернуть сообщение"><i class="fas fa-chevron-up"></i></div>');
-            const buttonsContainer = message.find('.mes_buttons');
-            if (buttonsContainer.length) {
-                buttonsContainer.prepend(arrowElement);
-            } else {
-                message.prepend(arrowElement);
-            }
+    const mesId = parseInt(mesElement.getAttribute('mesid'));
+    if (isNaN(mesId)) return false;
+    const message = getContext().chat?.[mesId];
+    if (!message) return false;
+
+    if (settings.autoCollapseByLength && message.mes && message.mes.length >= settings.lengthThreshold) {
+        return true;
+    }
+
+    if (settings.autoCollapseByAge) {
+        const chat = getContext().chat;
+        if (chat && chat.length - mesId - 1 >= settings.ageThreshold) {
+            return true;
         }
+    }
+
+    return false;
+}
+
+// Решение о сворачивании конкретного сообщения. Приоритет:
+// 1. Сообщения, исключённые из промпта (is_system) — всегда свёрнуты.
+// 2. Вручную свёрнутые — свёрнуты.
+// 3. Вручную развёрнутые — развёрнуты (переопределяют авто-сворачивание).
+// 4. Правила авто-сворачивания.
+function shouldCollapseMessage(mesElement, chatId) {
+    const key = getStableMessageKey(mesElement);
+    if (isMessageHiddenFromPrompt(mesElement)) return true;
+    if (!!chatId && isManuallyCollapsed(chatId, key)) return true;
+    if (!!chatId && isManuallyExpanded(chatId, key)) return false;
+    return shouldAutoCollapse(mesElement);
+}
+
+function processMessages($messages, chatId) {
+    $messages.each(function () {
+        const $message = $(this);
+        const $arrow = ensureArrow($message);
+        applyCollapsedState($message, $arrow, shouldCollapseMessage(this, chatId));
     });
 }
 
-// Observer to add arrows to newly added messages (e.g. streaming)
+// Observer: добавляет стрелки к новым сообщениям (стриминг, смена чата).
+// Коалесцирует все addedNodes тика в один flush через queueMicrotask —
+// полная перестройка чата = один батч, а не N коллбэков.
+//
+// ВАЖНО: при смене чата узлы приходят и в MutationObserver, и обрабатываются
+// синхронно в onChatChanged(). onChatChanged сбрасывает накопленные узлы, иначе
+// они прошли бы через _flushNewNodes вторым проходом (двойная работа на длинных
+// чатах). Set гарантирует дедупликацию, если один узел arrive в нескольких мутациях.
+
 let _collapserObserver = null;
+let _pendingNewNodes = new Set();
+let _flushScheduled = false;
+
+function _flushNewNodes() {
+    _flushScheduled = false;
+    if (_pendingNewNodes.size === 0) return;
+    const nodes = _pendingNewNodes;
+    _pendingNewNodes = new Set();
+    const chatId = getCurrentChatId();
+    for (const node of nodes) {
+        const $message = $(node);
+        const $arrow = ensureArrow($message);
+        applyCollapsedState($message, $arrow, shouldCollapseMessage(node, chatId));
+    }
+}
 
 export function startObserver() {
     if (_collapserObserver) return;
@@ -70,20 +203,13 @@ export function startObserver() {
         for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
                 if (node.nodeType === 1 && node.classList && node.classList.contains('mes')) {
-                    const message = $(node);
-                    if (message.find('.' + arrowClass).length === 0) {
-                        const arrowElement = $('<div class="mes_button ' + arrowClass + '" title="Свернуть/развернуть сообщение"><i class="fas fa-chevron-up"></i></div>');
-                        const buttonsContainer = message.find('.mes_buttons');
-                        if (buttonsContainer.length) {
-                            buttonsContainer.prepend(arrowElement);
-                        } else {
-                            message.prepend(arrowElement);
-                        }
-                    }
-                    // Устанавливаем начальное состояние для только что добавленного сообщения
-                    applyInitialCollapseState(node);
+                    _pendingNewNodes.add(node);
                 }
             }
+        }
+        if (_pendingNewNodes.size > 0 && !_flushScheduled) {
+            _flushScheduled = true;
+            queueMicrotask(_flushNewNodes);
         }
     });
     _collapserObserver.observe(chat, { childList: true });
@@ -94,232 +220,245 @@ export function stopObserver() {
         _collapserObserver.disconnect();
         _collapserObserver = null;
     }
+    _pendingNewNodes = new Set();
+    _flushScheduled = false;
 }
 
-// Function to remove collapse/expand arrows from messages
+// Выключение расширения: убрать стрелки и развернуть всё.
+// Состояние свёрнутости управляется только CSS-классом; inline-стилей
+// display:none расширение не выставляет, поэтому достаточно снять класс.
 export function removeCollapseArrowsFromMessages() {
-    console.log("Message Collapser: Removing collapse arrows.");
-    $('.' + collapsedClass).each(function() {
-        $(this).find('.mes_text').show();
-        $(this).removeClass(collapsedClass);
-    });
+    $('.' + collapsedClass).removeClass(collapsedClass);
     $('.' + arrowClass).remove();
     stopObserver();
 }
 
-// Handler for clicking an arrow
+// Единая точка очистки: observer, стрелки, делегированные обработчики.
+// Используется при disable и при hot-reload.
+export function destroy() {
+    removeCollapseArrowsFromMessages();
+    $(document).off(eventNamespace);
+}
+
+// ---------------------------------------------------------------------------
+// Обработчики
+// ---------------------------------------------------------------------------
+
+function toggleMessage($message) {
+    const $arrow = $message.find('.' + arrowClass).first();
+    const isCollapsed = $message.hasClass(collapsedClass);
+    const nowCollapsed = !isCollapsed;
+    applyCollapsedState($message, $arrow, nowCollapsed);
+
+    const key = getStableMessageKey($message[0]);
+    const chatId = getCurrentChatId();
+    if (key && chatId) {
+        saveManualToggleState(chatId, key, nowCollapsed);
+    }
+}
+
 export function handleArrowClick(event) {
-    const arrowSpan = $(this);
-    const icon = arrowSpan.find('i');
-    const message = arrowSpan.closest('.mes');
-    const messageText = message.find('.mes_text');
+    // Делегированный клик: цель могла быть внутренней (иконка <i>), берём
+    // ближайшую стрелку и от неё — ближайшее сообщение.
+    const $arrow = $(event.target).closest('.' + arrowClass);
+    const $message = $arrow.closest('.mes');
+    if ($message.length) toggleMessage($message);
+}
 
-    messageText.toggle();
-    message.toggleClass(collapsedClass);
-
-    const isNowCollapsed = !messageText.is(':visible');
-    if (isNowCollapsed) {
-        icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-    } else {
-        icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+// Переключает состояние конкретного сообщения по его mesid. Используется
+// слэш-командой /mc-toggle.
+export function toggleMessageByMesId(mesId) {
+    const $message = $(`.mes[mesid="${mesId}"]`);
+    if ($message.length === 0) {
+        toastr.warning(t('mc_toast_message_not_found', { mesId }));
+        return;
     }
+    toggleMessage($message);
+}
 
-    // Persist the new state
-    const mesId = parseInt(message.attr('mesid'));
+// Клавиатурная активация стрелки (Enter/Space) — доступность: role=button.
+export function handleArrowKeydown(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const $arrow = $(event.target).closest('.' + arrowClass);
+    if (!$arrow.length) return;
+    event.preventDefault();
+    const $message = $arrow.closest('.mes');
+    if ($message.length) toggleMessage($message);
+}
+
+// Чат загружен/переключён (событие ST CHAT_CHANGED). За один проход по
+// .mes вставляет стрелки и выставляет начальное состояние: исключённые из
+// промпта и вручную свёрнутые — свёрнуты, остальные — развёрнуты.
+export function onChatChanged() {
+    if (!getSettings()?.isEnabled) return;
     const chatId = getCurrentChatId();
-    if (!isNaN(mesId) && chatId) {
-        saveCollapsedState(chatId, mesId, isNowCollapsed);
+    if (chatId) migratePositionalKeysIfNeeded(chatId);
+
+    // Синхронная обработка уже покрывает все текущие .mes. Сбрасываем очередь
+    // observer-а, иначе те же узлы пройдут вторым проходом в _flushNewNodes.
+    _pendingNewNodes = new Set();
+    _flushScheduled = false;
+
+    processMessages($('.mes'), chatId);
+}
+
+// Чат удалён (событие ST CHAT_DELETED). Удаляет сохранённое состояние
+// сворачивания для удалённого чата, чтобы collapsedMessages не рос бесконечно.
+// ST передаёт имя файла чата без .jsonl — это тот же ключ, под которым
+// сохраняем (characters[chatId].chat / getCurrentChatId()).
+export function onChatDeleted(chatId) {
+    const settings = getSettings();
+    if (!chatId) return;
+    let changed = false;
+    if (settings?.collapsedMessages?.[chatId]) {
+        delete settings.collapsedMessages[chatId];
+        changed = true;
     }
-}
-
-/**
- * Определяет, исключено ли сообщение из промпта.
- *
- * .mes_unhide.fa-eye-slash присутствует в DOM у КАЖДОГО сообщения.
- * ST скрывает её через CSS: .mes[is_system="false"] .mes_unhide { display: none; }
- * Когда сообщение исключают из промпта — is_system меняется, правило перестаёт
- * применяться, и кнопка получает ненулевой display.
- *
- * jQuery .css('display') возвращает собственный computed display элемента,
- * не зависящий от display:none у родителя (.extraMesButtons),
- * поэтому работает корректно вне зависимости от того, открыта ли панель действий.
- */
-function isMessageExcludedFromPrompt(mesElement) {
-    const $unhide = $(mesElement).find('.mes_unhide.fa-eye-slash');
-    return $unhide.length > 0 && $unhide.css('display') !== 'none';
-}
-
-/**
- * Устанавливает начальное состояние одного сообщения:
- * - исключено из промпта → свернуть
- * - вручную свёрнуто пользователем (сохранено в settings) → свернуть
- * - иначе → развернуть
- */
-function applyInitialCollapseState(mesElement) {
-    const message = $(mesElement);
-    const messageText = message.find('.mes_text');
-    const icon = message.find('.' + arrowClass + ' i');
-
-    const chatId = getCurrentChatId();
-    const mesId = parseInt(message.attr('mesid'));
-    const manuallyCollapsed = !isNaN(mesId) && !!chatId && isManuallyCollapsed(chatId, mesId);
-
-    if (isMessageExcludedFromPrompt(mesElement) || manuallyCollapsed) {
-        messageText.hide();
-        message.addClass(collapsedClass);
-        if (icon.length) icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-    } else {
-        messageText.show();
-        message.removeClass(collapsedClass);
-        if (icon.length) icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+    if (settings?.manuallyExpandedMessages?.[chatId]) {
+        delete settings.manuallyExpandedMessages[chatId];
+        changed = true;
     }
+    if (changed) saveSettingsDebounced();
 }
 
-/**
- * Устанавливает начальное состояние всех сообщений в чате:
- * исключённые из промпта и вручную свёрнутые сворачиваются, остальные разворачиваются.
- * Вызывается после addCollapseArrowsToMessages при загрузке/смене чата.
- */
-export function autoCollapseHiddenMessages() {
-    $('.mes').each(function() {
-        applyInitialCollapseState(this);
+function setHiddenMessagesCollapsed(collapsed) {
+    const $hidden = $('.mes').filter(function () {
+        return isMessageHiddenFromPrompt(this);
     });
+    if ($hidden.length === 0) {
+        toastr.info(collapsed ? t('mc_toast_no_hidden_collapse') : t('mc_toast_no_hidden_expand'));
+        return;
+    }
+    $hidden.each(function () {
+        applyCollapsedState($(this), ensureArrow($(this)), collapsed);
+    });
+    const hiddenCollapsed = t('mc_toast_hidden_collapsed', { count: $hidden.length });
+    toastr.success(hiddenCollapsed);
 }
 
-export function handleCollapseDisabledClick() {
-    const $disabledMessages = $('.mes').filter(function() {
-        return isMessageExcludedFromPrompt(this);
-    });
+export function handleCollapseHiddenClick() {
+    setHiddenMessagesCollapsed(true);
+}
 
-    if ($disabledMessages.length === 0) {
-        toastr.info("No 'hidden' messages found to collapse.");
+export function handleExpandHiddenClick() {
+    setHiddenMessagesCollapsed(false);
+}
+
+// Сворачивание/разворачивание по типу отправителя
+
+function isMessageSender(mesElement, senderType) {
+    if (senderType === 'user') return mesElement.getAttribute('is_user') === 'true';
+    if (senderType === 'system') return mesElement.getAttribute('is_system') === 'true';
+    if (senderType === 'character') {
+        return mesElement.getAttribute('is_user') !== 'true' &&
+               mesElement.getAttribute('is_system') !== 'true';
+    }
+    return false;
+}
+
+function setMessagesBySenderCollapsed(senderType, collapsed) {
+    const $matches = $('.mes').filter(function () {
+        return isMessageSender(this, senderType);
+    });
+    if ($matches.length === 0) {
+        toastr.info(t('mc_toast_no_sender_messages', { sender: senderType }));
         return;
     }
 
-    let count = 0;
-    $disabledMessages.each(function() {
-        const message = $(this);
-        const messageText = message.find('.mes_text');
-        const arrowSpan = message.find('.' + arrowClass);
-        const icon = arrowSpan.find('i');
+    const chatId = getCurrentChatId();
+    const settings = chatId ? getSettings() : null;
 
-        messageText.hide();
-        message.addClass(collapsedClass);
-        if (arrowSpan.length && icon.length) {
-            icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+    const keys = [];
+    $matches.each(function () {
+        applyCollapsedState($(this), ensureArrow($(this)), collapsed);
+        if (chatId) {
+            const key = getStableMessageKey(this);
+            if (key) keys.push(key);
         }
-        count++;
     });
 
-    if (count > 0) {
-        toastr.success(count + (count === 1 ? " 'hidden' message collapsed." : " 'hidden' messages collapsed."));
-    } else {
-        toastr.info("No 'hidden' messages found to collapse (post-loop check).");
+    if (chatId && settings) {
+        // Персист через атомарную bulk-функцию, сохраняющую инвариант приоритета
+        // collapsed > expanded: collapse добавляет ключи в collapsedMessages и
+        // убирает ТОЛЬКО matching-ключи из manuallyExpanded (не весь объект чата —
+        // иначе сносятся чужие ручные разворачивания других отправителей);
+        // expand обязан удалить ключи из collapsedMessages, иначе на следующем
+        // onChatChanged сообщение свернётся обратно.
+        if (setMessagesBulkToggleInState(settings, chatId, keys, collapsed)) {
+            saveSettingsDebounced();
+        }
     }
+
+    const senderCollapsed = t('mc_toast_sender_collapsed', { count: $matches.length, sender: senderType });
+    toastr.success(senderCollapsed);
 }
 
-export function handleExpandDisabledClick() {
-    const $disabledMessages = $('.mes').filter(function() {
-        return isMessageExcludedFromPrompt(this);
-    });
-
-    if ($disabledMessages.length === 0) {
-        toastr.info("No 'hidden' messages found to expand.");
-        return;
-    }
-
-    let count = 0;
-    $disabledMessages.each(function() {
-        const message = $(this);
-        const messageText = message.find('.mes_text');
-        const arrowSpan = message.find('.' + arrowClass);
-        const icon = arrowSpan.find('i');
-
-        messageText.show();
-        message.removeClass(collapsedClass);
-        if (arrowSpan.length && icon.length) {
-            icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-        }
-        count++;
-    });
-
-    if (count > 0) {
-        toastr.success(count + (count === 1 ? " 'hidden' message expanded." : " 'hidden' messages expanded."));
-    } else {
-        toastr.info("No 'hidden' messages found to expand (post-loop check).");
-    }
-}
+export function handleCollapseUserClick()      { setMessagesBySenderCollapsed('user', true); }
+export function handleExpandUserClick()        { setMessagesBySenderCollapsed('user', false); }
+export function handleCollapseCharacterClick() { setMessagesBySenderCollapsed('character', true); }
+export function handleExpandCharacterClick()   { setMessagesBySenderCollapsed('character', false); }
+export function handleCollapseSystemClick()    { setMessagesBySenderCollapsed('system', true); }
+export function handleExpandSystemClick()      { setMessagesBySenderCollapsed('system', false); }
 
 export function handleExpandAllClick() {
-    console.log("Message Collapser: Expanding all messages.");
-    let count = 0;
-    $('.mes').each(function() {
-        const message = $(this);
-        if (message.find('.mes_text').is(':hidden') || message.hasClass(collapsedClass)) {
-            const messageText = message.find('.mes_text');
-            const arrowSpan = message.find('.' + arrowClass);
-            const icon = arrowSpan.find('i');
-
-            messageText.show();
-            message.removeClass(collapsedClass);
-            if (arrowSpan.length && icon.length) {
-                icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-            }
-            count++;
-        }
+    const $collapsed = $('.mes').filter('.' + collapsedClass);
+    $collapsed.each(function () {
+        applyCollapsedState($(this), ensureArrow($(this)), false);
     });
 
-    // Clear saved manual collapse state for this chat
+    // Очищаем сохранённое ручное состояние для этого чата. Сообщения, свёрнутые
+    // как is_system (hidden из промпта), на следующей загрузке свернутся снова —
+    // это их собственный флаг, а не ручное состояние; им управляет eye-icon.
     const chatId = getCurrentChatId();
-    if (chatId && extension_settings[extensionName]?.collapsedMessages) {
-        extension_settings[extensionName].collapsedMessages[chatId] = [];
-        saveSettingsDebounced();
+    if (chatId) {
+        const changed = clearManualStateForChat(getSettings(), chatId);
+        if (changed) saveSettingsDebounced();
     }
 
-    if (count > 0) {
-        toastr.success(count + (count === 1 ? " message expanded." : " messages expanded."));
+    if ($collapsed.length > 0) {
+        toastr.success(t('mc_toast_all_expanded', { count: $collapsed.length }));
     } else {
-        toastr.info("All messages already expanded or no messages to expand.");
+        toastr.info(t('mc_toast_all_already_expanded'));
     }
 }
 
 export function handleCollapseAllClick() {
-    console.log("Message Collapser: Collapsing all messages.");
-    let count = 0;
-    const collapsedIds = [];
+    const $messages = $('.mes');
+    const collapsedMap = {};
+    let changed = 0;
 
-    $('.mes').each(function() {
-        const message = $(this);
-        const messageText = message.find('.mes_text');
-        const arrowSpan = message.find('.' + arrowClass);
-        const icon = arrowSpan.find('i');
-
-        if (messageText.is(':visible') || !message.hasClass(collapsedClass)) {
-            messageText.hide();
-            message.addClass(collapsedClass);
-            if (arrowSpan.length && icon.length) {
-                icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-            }
-            count++;
+    $messages.each(function () {
+        const $message = $(this);
+        const wasCollapsed = $message.hasClass(collapsedClass);
+        if (!wasCollapsed) {
+            applyCollapsedState($message, ensureArrow($message), true);
+            changed++;
         }
-
-        // Collect all mesids regardless — after this action every message is collapsed
-        const mesId = parseInt(message.attr('mesid'));
-        if (!isNaN(mesId)) collapsedIds.push(mesId);
+        // После действия каждое сообщение свёрнуто. Фиксируем только ручное
+        // состояние по стабильному ключу; is_system-сообщения в карте не нужны —
+        // они свёрнуты собственным флагом и разворачиваются через eye-icon,
+        // а дублирование в manual-карте расходится с семантикой Expand All.
+        if (!isMessageHiddenFromPrompt(this)) {
+            const key = getStableMessageKey(this);
+            if (key) collapsedMap[key] = true;
+        }
     });
 
-    // Persist the full collapsed list for this chat
     const chatId = getCurrentChatId();
     if (chatId) {
-        const settings = extension_settings[extensionName];
+        const settings = getSettings();
         if (!settings.collapsedMessages) settings.collapsedMessages = {};
-        settings.collapsedMessages[chatId] = collapsedIds;
+        settings.collapsedMessages[chatId] = collapsedMap;
+        // Ручные развёртывания больше не актуальны: всё свёрнуто.
+        if (settings.manuallyExpandedMessages?.[chatId]) {
+            delete settings.manuallyExpandedMessages[chatId];
+        }
         saveSettingsDebounced();
     }
 
-    if (count > 0) {
-        toastr.success(count + (count === 1 ? " message collapsed." : " messages collapsed."));
+    if (changed > 0) {
+        toastr.success(t('mc_toast_all_collapsed', { count: changed }));
     } else {
-        toastr.info("All messages already collapsed or no messages to collapse.");
+        toastr.info(t('mc_toast_all_already_collapsed'));
     }
 }

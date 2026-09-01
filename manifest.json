@@ -1,11 +1,15 @@
 {
-    "display_name": "Message_Collapser_InBar",
+    "display_name": "Message Collapser InBar",
     "loading_order": 9,
     "requires": [],
     "optional": [],
     "js": "main.js",
     "author": "ochen-beep",
-    "version": "1.0.0",
+    "version": "2.1.0",
     "homePage": "https://github.com/ochen-beep/Message_Collapser_InBar",
-    "css": "style.css"
+    "css": "style.css",
+    "i18n": {
+        "ru-ru": "i18n/ru-ru.json",
+        "en-us": "i18n/en-us.json"
+    }
 }
