@@ -5,9 +5,7 @@
  * wires init/teardown and exposes the manifest hook surface.
  */
 
-import { extension_settings } from '../../../extensions.js';
-import { saveSettingsDebounced } from '../../../../script.js';
-import { MODULE_NAME, LEGACY_MODULE_NAME, getCtx, getSettings, trace, error } from './src/core.js';
+import { MODULE_NAME, LEGACY_MODULE_NAME, getCtx, getSettings, saveSettings, trace, error } from './src/core.js';
 import { migrateSettingsKey } from './src/state.js';
 import { tr } from './src/i18n.js';
 import { mountSettingsPanel, unmountSettingsPanel } from './src/settings.js';
@@ -31,9 +29,9 @@ function startInit(label) {
 async function init() {
     // Must run before the first getSettings(): buildSettings would create a
     // fresh default key and shadow the legacy data.
-    if (migrateSettingsKey(extension_settings, MODULE_NAME, LEGACY_MODULE_NAME)) {
+    if (migrateSettingsKey(getCtx().extensionSettings, MODULE_NAME, LEGACY_MODULE_NAME)) {
         trace(`migrated settings key "${LEGACY_MODULE_NAME}" → "${MODULE_NAME}"`);
-        saveSettingsDebounced();
+        saveSettings();
     }
 
     await mountSettingsPanel();
@@ -81,9 +79,9 @@ export function onActivate() {
 
 /** Hook: extension updated. Runs the settings-key migration, then init covers the rest lazily. */
 export function onUpdate() {
-    if (migrateSettingsKey(extension_settings, MODULE_NAME, LEGACY_MODULE_NAME)) {
+    if (migrateSettingsKey(getCtx().extensionSettings, MODULE_NAME, LEGACY_MODULE_NAME)) {
         trace(`onUpdate: migrated settings key "${LEGACY_MODULE_NAME}" → "${MODULE_NAME}"`);
-        saveSettingsDebounced();
+        saveSettings();
     }
 }
 
@@ -103,8 +101,8 @@ export function onDisable() {
 export function onClean() {
     trace('onClean: cleaning up + clearing settings…');
     cleanup();
-    delete extension_settings[MODULE_NAME];
-    saveSettingsDebounced();
+    delete getCtx().extensionSettings[MODULE_NAME];
+    saveSettings();
 }
 
 // ── Legacy bootstrap ──

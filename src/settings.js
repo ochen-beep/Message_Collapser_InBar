@@ -7,8 +7,7 @@
  * all ids stay in the DOM read-only.
  */
 
-import { saveSettingsDebounced } from '../../../../script.js';
-import { FOLDER_NAME, eventNamespace, getSettings, getCtx, warn, log } from './core.js';
+import { FOLDER_NAME, eventNamespace, getSettings, getCtx, saveSettings, warn, log } from './core.js';
 import { migrateLegacyCollapsedState } from './state.js';
 import { startObserver, onChatChanged, destroy, bindArrowHandlers } from './collapse.js';
 import {
@@ -48,7 +47,7 @@ export function syncSettingsUi(settings) {
 function handleMasterEnableToggleChange(event) {
     const settings = getSettings();
     settings.isEnabled = Boolean($(event.target).prop('checked'));
-    saveSettingsDebounced();
+    saveSettings();
 
     if (settings.isEnabled) {
         startObserver();
@@ -62,7 +61,7 @@ function handleMasterEnableToggleChange(event) {
 function handlePreviewModeChange(event) {
     const settings = getSettings();
     settings.previewMode = $(event.target).val();
-    saveSettingsDebounced();
+    saveSettings();
     onChatChanged();
 }
 
@@ -71,14 +70,14 @@ function handlePreviewLinesChange(event) {
     const value = parseInt($(event.target).val());
     settings.previewLines = Number.isNaN(value) ? 2 : Math.max(1, Math.min(10, value));
     applyPreviewLines(settings.previewLines);
-    saveSettingsDebounced();
+    saveSettings();
     onChatChanged();
 }
 
 function handleAutoCollapseByLengthChange(event) {
     const settings = getSettings();
     settings.autoCollapseByLength = Boolean($(event.target).prop('checked'));
-    saveSettingsDebounced();
+    saveSettings();
     onChatChanged();
 }
 
@@ -86,14 +85,14 @@ function handleLengthThresholdChange(event) {
     const settings = getSettings();
     const value = parseInt($(event.target).val());
     settings.lengthThreshold = Number.isNaN(value) ? 1000 : Math.max(100, value);
-    saveSettingsDebounced();
+    saveSettings();
     onChatChanged();
 }
 
 function handleAutoCollapseByAgeChange(event) {
     const settings = getSettings();
     settings.autoCollapseByAge = Boolean($(event.target).prop('checked'));
-    saveSettingsDebounced();
+    saveSettings();
     onChatChanged();
 }
 
@@ -101,7 +100,7 @@ function handleAgeThresholdChange(event) {
     const settings = getSettings();
     const value = parseInt($(event.target).val());
     settings.ageThreshold = Number.isNaN(value) ? 20 : Math.max(1, value);
-    saveSettingsDebounced();
+    saveSettings();
     onChatChanged();
 }
 

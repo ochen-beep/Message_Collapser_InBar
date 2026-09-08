@@ -7,8 +7,7 @@
  * lifecycle handlers (CHAT_CHANGED / CHAT_DELETED).
  */
 
-import { saveSettingsDebounced } from '../../../../script.js';
-import { arrowClass, collapsedClass, previewClass, eventNamespace, getSettings, getCtx, trace } from './core.js';
+import { arrowClass, collapsedClass, previewClass, eventNamespace, getSettings, getCtx, saveSettings, trace } from './core.js';
 import {
     getStableMessageKey as getStableMessageKeyFromState,
     isManuallyCollapsed as isManuallyCollapsedFromState,
@@ -47,7 +46,7 @@ function isManuallyExpanded(chatId, key) {
 // a manual choice always overrides auto-collapse.
 function saveManualToggleState(chatId, key, collapsed) {
     const changed = saveManualToggleStateToState(getSettings(), chatId, key, collapsed);
-    if (changed) saveSettingsDebounced();
+    if (changed) saveSettings();
 }
 
 // ── DOM primitives ──
@@ -252,7 +251,7 @@ export function onChatChanged() {
             getCtx().chat,
             chatId,
         );
-        if (changed) saveSettingsDebounced();
+        if (changed) saveSettings();
     }
 
     // The synchronous pass already covers every current .mes; drop the
@@ -280,7 +279,7 @@ export function onChatDeleted(chatId) {
         changed = true;
     }
     if (changed) {
-        saveSettingsDebounced();
+        saveSettings();
         trace(`onChatDeleted: dropped collapse state for "${chatId}"`);
     }
 }

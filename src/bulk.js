@@ -5,8 +5,7 @@
  * everything), exposed to the settings panel buttons and the slash commands.
  */
 
-import { saveSettingsDebounced } from '../../../../script.js';
-import { collapsedClass, getSettings, getCtx } from './core.js';
+import { collapsedClass, getSettings, getCtx, saveSettings } from './core.js';
 import {
     getStableMessageKey as getStableMessageKeyFromState,
     setMessagesBulkToggle as setMessagesBulkToggleInState,
@@ -91,7 +90,7 @@ function setMessagesBySenderCollapsed(senderType, collapsed) {
         // delete the keys from collapsedMessages or the next onChatChanged
         // collapses everything back.
         if (setMessagesBulkToggleInState(settings, chatId, keys, collapsed)) {
-            saveSettingsDebounced();
+            saveSettings();
         }
     }
 
@@ -123,7 +122,7 @@ export function handleExpandAllClick() {
     const chatId = getCurrentChatId();
     if (chatId) {
         const changed = clearManualStateForChat(getSettings(), chatId);
-        if (changed) saveSettingsDebounced();
+        if (changed) saveSettings();
     }
 
     if ($collapsed.length > 0) {
@@ -164,7 +163,7 @@ export function handleCollapseAllClick() {
         if (settings.manuallyExpandedMessages?.[chatId]) {
             delete settings.manuallyExpandedMessages[chatId];
         }
-        saveSettingsDebounced();
+        saveSettings();
     }
 
     if (changed > 0) {

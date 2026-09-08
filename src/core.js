@@ -3,10 +3,11 @@
  * Message Collapser — Core module.
  * Constants, settings access, context/logging helpers. Everything else in src/
  * imports from here; core.js itself stays dependency-free except for the pure
- * state.js (one-way edge, safe against import cycles).
+ * state.js (one-way edge, safe against import cycles). ST services are always
+ * reached through getCtx() — no deep relative imports, so loading works under
+ * any install folder depth.
  */
 
-import { extension_settings } from '../../../extensions.js';
 import { buildSettings } from './state.js';
 
 // Settings key under extension_settings. Renamed from the legacy
@@ -50,7 +51,12 @@ export function getCtx() {
 
 // Single access point to the extension settings with default-key backfill.
 export function getSettings() {
-    return buildSettings(extension_settings, MODULE_NAME);
+    return buildSettings(getCtx().extensionSettings, MODULE_NAME);
+}
+
+/** Persist extension settings through ST's debounced saver. */
+export function saveSettings() {
+    getCtx()?.saveSettingsDebounced?.();
 }
 
 // ── Logging ──

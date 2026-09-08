@@ -5,7 +5,7 @@
     "js": "index.js",
     "css": "style.css",
     "author": "ochen-beep",
-    "version": "2.2.0",
+    "version": "2.2.1",
     "homePage": "https://github.com/ochen-beep/SillyTavern-Message-Collapser",
     "auto_update": false,
     "minimum_client_version": "1.12.0",
