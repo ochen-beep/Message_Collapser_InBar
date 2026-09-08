@@ -73,6 +73,17 @@
 
 /* ── Settings panel ── */
 
+/* Breathing room: ST gives neither #extensions_settings nor
+   .inline-drawer-content any padding, so rows would sit flush against the
+   drawer edges and the header. */
+.mc_settings .inline-drawer-header {
+    padding: 0.35rem 1rem;
+}
+
+.mc_settings .inline-drawer-content {
+    padding: 0.25rem 1rem 0.5rem;
+}
+
 .mc_section {
     margin-top: 0.75rem;
 }
@@ -94,6 +105,50 @@
     text-transform: uppercase;
     color: var(--mc-accent);
     margin-bottom: 0.4rem;
+}
+
+/* Rows: ST's .flex-container only sets display/gap/wrap — add vertical
+   rhythm and center alignment so label, control and suffix sit on one line. */
+.mc_block {
+    align-items: center;
+    margin: 0.3rem 0;
+    min-height: 1.5rem;
+}
+
+/* Fields: ST styles <select> globally but leaves bare <input> unstyled, so
+   number inputs render as the browser's default white widget, out of place
+   next to the drawn toggle and checkboxes. Put every field on the panel
+   palette (background-color only for the select — ST's dropdown arrow is a
+   background-image on the same element). */
+.mc_block input[type="number"],
+.mc_block select {
+    background-color: var(--mc-bg);
+    color: var(--mc-text);
+    border: 1px solid var(--mc-border);
+    border-radius: 4px;
+    padding: 0.2rem 0.45rem;
+    margin: 0;
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+.mc_block input[type="number"] {
+    width: 5.5rem;
+    flex-shrink: 0;
+    /* Native spin buttons follow color-scheme; the panel palette is dark
+       (fallback tokens included), so keep the arrows light for visibility. */
+    color-scheme: dark;
+}
+
+.mc_block select {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: 20px;   /* keep the label clear of ST's dropdown arrow */
+}
+
+.mc_block input[type="number"]:focus,
+.mc_block select:focus {
+    border-color: var(--mc-accent);
 }
 
 .mc_action_row {
