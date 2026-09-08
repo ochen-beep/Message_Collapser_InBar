@@ -1,0 +1,122 @@
+<div class="mc_settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <strong data-i18n="mc.settings.title">Message Collapser</strong>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down" aria-hidden="true"></div>
+        </div>
+        <div class="inline-drawer-content">
+
+            <!-- Master toggle: switch + label + ON/OFF badge.
+                 The native checkbox stays in the DOM (semantics, keyboard),
+                 visually replaced by the custom toggle track. -->
+            <div class="mc_block flex-container">
+                <label class="mc_toggle" for="mc_master_enable">
+                    <input id="mc_master_enable" type="checkbox" />
+                    <span class="mc_toggle_track" aria-hidden="true"></span>
+                </label>
+                <label for="mc_master_enable" data-i18n="mc.settings.enable">Enable message collapsing</label>
+                <span class="mc_status_badge" aria-hidden="true">
+                    <span class="mc_badge_on">ON</span>
+                    <span class="mc_badge_off">OFF</span>
+                </span>
+            </div>
+
+            <!-- Body: dimmed while the master toggle is off -->
+            <div class="mc_settings_body">
+
+            <!-- View -->
+            <div class="mc_section">
+                <h4 class="mc_section_title" data-i18n="mc.settings.viewSection">View</h4>
+                <div class="mc_block flex-container">
+                    <label for="mc_preview_mode" data-i18n="mc.settings.previewMode">Collapsed message display:</label>
+                    <select id="mc_preview_mode">
+                        <option value="hide" data-i18n="mc.settings.previewHide">Hide completely</option>
+                        <option value="preview" data-i18n="mc.settings.previewLinesOption">Show preview lines</option>
+                    </select>
+                </div>
+                <!-- Nested preview lines — shown only when preview mode is active -->
+                <div class="mc_block flex-container mc_nested mc_preview_lines_field">
+                    <label for="mc_preview_lines" data-i18n="mc.settings.previewLinesLabel">Preview lines:</label>
+                    <input id="mc_preview_lines" type="number" min="1" max="10" value="2" />
+                </div>
+            </div>
+
+            <!-- Automation -->
+            <div class="mc_section">
+                <h4 class="mc_section_title" data-i18n="mc.settings.autoSection">Automation</h4>
+                <div class="mc_block flex-container">
+                    <label class="mc_checkbox" for="mc_auto_collapse_by_length">
+                        <input id="mc_auto_collapse_by_length" type="checkbox" />
+                        <span class="mc_checkbox_box" aria-hidden="true"></span>
+                        <span data-i18n="mc.settings.autoLength">Collapse if longer than</span>
+                    </label>
+                </div>
+                <!-- Nested threshold — shown only while the length rule is enabled -->
+                <div class="mc_block flex-container mc_nested mc_length_field">
+                    <input id="mc_length_threshold" type="number" min="100" value="1000" />
+                    <span data-i18n="mc.settings.charsSuffix">chars</span>
+                </div>
+                <div class="mc_block flex-container">
+                    <label class="mc_checkbox" for="mc_auto_collapse_by_age">
+                        <input id="mc_auto_collapse_by_age" type="checkbox" />
+                        <span class="mc_checkbox_box" aria-hidden="true"></span>
+                        <span data-i18n="mc.settings.autoAge">Collapse if older than</span>
+                    </label>
+                </div>
+                <!-- Nested threshold — shown only while the age rule is enabled -->
+                <div class="mc_block flex-container mc_nested mc_age_field">
+                    <input id="mc_age_threshold" type="number" min="1" value="20" />
+                    <span data-i18n="mc.settings.messagesSuffix">messages from the end</span>
+                </div>
+            </div>
+
+            <!-- Manual control -->
+            <div class="mc_section">
+                <h4 class="mc_section_title" data-i18n="mc.settings.manualSection">Manual control</h4>
+
+                <div class="mc_action_row">
+                    <span data-i18n="mc.target.all">All messages</span>
+                    <div class="mc_action_btns">
+                        <button type="button" id="mc_collapse_all" class="menu_button mc_text_btn" data-i18n="mc.action.collapse">Collapse</button>
+                        <button type="button" id="mc_expand_all" class="menu_button mc_text_btn" data-i18n="mc.action.expand">Expand</button>
+                    </div>
+                </div>
+
+                <div class="mc_action_row">
+                    <span data-i18n="mc.target.hidden">Hidden from prompt</span>
+                    <div class="mc_action_btns">
+                        <button type="button" id="mc_collapse_hidden" class="menu_button mc_text_btn" data-i18n="mc.action.collapse">Collapse</button>
+                        <button type="button" id="mc_expand_hidden" class="menu_button mc_text_btn" data-i18n="mc.action.expand">Expand</button>
+                    </div>
+                </div>
+
+                <div class="mc_action_row">
+                    <span data-i18n="mc.target.user">User</span>
+                    <div class="mc_action_btns">
+                        <button type="button" id="mc_collapse_user" class="menu_button mc_text_btn" data-i18n="mc.action.collapse">Collapse</button>
+                        <button type="button" id="mc_expand_user" class="menu_button mc_text_btn" data-i18n="mc.action.expand">Expand</button>
+                    </div>
+                </div>
+
+                <div class="mc_action_row">
+                    <span data-i18n="mc.target.character">Character</span>
+                    <div class="mc_action_btns">
+                        <button type="button" id="mc_collapse_character" class="menu_button mc_text_btn" data-i18n="mc.action.collapse">Collapse</button>
+                        <button type="button" id="mc_expand_character" class="menu_button mc_text_btn" data-i18n="mc.action.expand">Expand</button>
+                    </div>
+                </div>
+
+                <div class="mc_action_row">
+                    <span data-i18n="mc.target.system">System</span>
+                    <div class="mc_action_btns">
+                        <button type="button" id="mc_collapse_system" class="menu_button mc_text_btn" data-i18n="mc.action.collapse">Collapse</button>
+                        <button type="button" id="mc_expand_system" class="menu_button mc_text_btn" data-i18n="mc.action.expand">Expand</button>
+                    </div>
+                </div>
+            </div>
+
+            </div><!-- /mc_settings_body -->
+
+        </div>
+    </div>
+</div>

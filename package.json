@@ -1,11 +1,4 @@
 {
-  "name": "message-collapser-inbar",
-  "version": "2.1.0",
-  "description": "SillyTavern extension for collapsing messages",
-  "type": "module",
-  "scripts": {
-    "test": "node --test tests/**/*.test.js",
-    "check": "node --check actions.js && node --check main.js && node --check state.js"
-  },
-  "private": true
+    "private": true,
+    "type": "module"
 }

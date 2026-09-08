@@ -1,47 +1,67 @@
-# Message Collapser InBar
+# Message Collapser
 
-SillyTavern extension. Adds a collapse button inside the message action bar — next to edit, copy, and other buttons — instead of floating it outside the chat bubble.
+A [SillyTavern](https://docs.sillytavern.app/) extension that adds a collapse toggle to every message's action bar — next to edit, copy, and the other buttons — instead of floating it outside the chat bubble. Collapsed messages hide their text (or show a short preview), and the choice survives reloads.
 
-Fork of [InspectorCaracal/Message_Collapser](https://github.com/InspectorCaracal/Message_Collapser).
+**English** · [Русский](USER_GUIDE.md)
+
+> This extension is a substantial rework of [InspectorCaracal/Message_Collapser](https://github.com/InspectorCaracal/Message_Collapser). It interacts with [SillyTavern](https://github.com/SillyTavern/SillyTavern) (AGPL-3.0) through its public extension API and contains no SillyTavern code.
+
+## Features
+
+- **Chevron button in the action bar** — collapse or expand individual messages, keyboard-operable (`Tab` + `Enter`/`Space`, `aria-expanded`).
+- **Prompt-hidden auto-collapse** — messages excluded from the prompt (eye icon) collapse automatically on chat load.
+- **Preview mode** — show the first N lines of a collapsed message instead of hiding it completely.
+- **Auto-collapse rules** — collapse messages longer than N chars or older than N messages from the end of the chat. Computed at render time, never persisted.
+- **Bulk actions** — collapse/expand all, prompt-hidden only, or by sender (user / character / system), from the settings panel or slash commands.
+- **Persistent manual state** — manual collapse/expand is saved per chat and restored on reload.
+- **Master toggle** — disable the extension without uninstalling it.
+- **Localized UI** — English base with a Russian translation.
+
+## Requirements
+
+- SillyTavern **1.12.0** or newer.
 
 ## Installation
 
-Extensions → Install extension from URL → `https://github.com/ochen-beep/Message_Collapser_InBar`
+### From a git repository
+
+> Repository URL: **https://github.com/ochen-beep/SillyTavern-Message-Collapser**
+
+1. Open **Extensions → Manage Extensions** in SillyTavern.
+2. Paste the repository URL into the *Install extension* field and press **Install**.
+3. Reload SillyTavern and make sure **Message Collapser** is enabled in the extensions list.
+
+### Manual
+
+1. Copy the release package contents (`manifest.json`, `index.js`, `style.css`, `settings.html`, `src/`, `USER_GUIDE.md`) into a new folder under `data/<user-handle>/extensions/`.
+2. Restart SillyTavern, then enable **Message Collapser** in **Manage Extensions**.
 
 ## Usage
 
-- **Chevron button** in the action bar — collapse or expand individual messages
-- **Auto-collapse on load** — messages excluded from the prompt are collapsed automatically when opening a chat
-- **Preview mode** — show the first N lines of collapsed messages instead of hiding them completely
-- **Auto-collapse rules** — automatically collapse messages that exceed a length threshold or are older than N messages from the end of the chat
-- **Collapse/Expand Hidden** in settings — bulk-collapse messages excluded from the prompt
-- **Collapse/Expand All** in settings — collapse or expand everything at once
-- **Collapse/Expand by sender** — bulk actions for user, character, or system messages
-- **Master toggle** — disable the extension without uninstalling it
-- **Slash commands** — `/mc-collapse`, `/mc-expand`, `/mc-toggle`
+1. Open the **Message Collapser** block in the **Extensions** panel and enable it.
+2. Use the chevron in any message's action bar to collapse or expand it.
+3. Pick a collapsed display mode under **View**: hide completely, or show a configurable number of preview lines.
+4. Optionally enable **Automation** rules: collapse messages over a length threshold, or older than N messages from the end of the chat.
+5. Use **Manual control** for bulk actions: all messages, prompt-hidden only, or per sender.
 
 ## Slash Commands
 
-The extension registers STscript commands (requires SillyTavern's SlashCommandParser API):
+Requires SillyTavern's SlashCommandParser API; skipped silently on builds without it.
 
-- `/mc-collapse [all|disabled|user|character|system]` — collapse the target group
-- `/mc-expand [all|disabled|user|character|system]` — expand the target group
+- `/mc-collapse [all|hidden|user|character|system]` — collapse the target group
+- `/mc-expand [all|hidden|user|character|system]` — expand the target group
 - `/mc-toggle <mesid>` — toggle collapse for a specific message
 
 Aliases: `/mcc`, `/mce`, `/mct`.
 
 ## Notes
 
-- Manual collapse state is saved per chat and restored on reload. State is keyed by the message's `send_date` timestamp, which is stable across deletions and reordering — collapsing message #5 and then deleting an earlier message will not shift the collapse to the wrong message.
+- Manual collapse state is saved per chat and restored on reload. State is keyed by the message's `send_date` timestamp, which is stable across deletions and reordering — collapsing message #5 and then deleting an earlier message will not shift the collapse to the wrong message. Legacy positional-key data migrates lazily on chat load.
 - Messages excluded from the prompt (eye icon) are auto-collapsed on chat load. This is independent of manual collapse state; use the eye icon to control prompt inclusion.
 - **Collapse/Expand All** operate on every visible message but only persist manual state for non-hidden messages (hidden messages are governed by their own flag).
 - **Auto-collapse rules** are computed at render time and are not persisted. If you manually expand a message that was auto-collapsed, it will stay expanded on next load (manual state overrides auto rules).
+- A detailed Russian guide is available in [USER_GUIDE.md](USER_GUIDE.md).
 
-## Accessibility
+## License
 
-- The collapse button is keyboard-operable: focus it with Tab and activate with Enter or Space.
-- `aria-expanded` reflects the current state for assistive technologies.
-
-## Internationalization
-
-- Settings panel strings use `data-i18n` attributes and can be translated via SillyTavern's standard translation system.
+[AGPL-3.0](LICENSE)

@@ -1,0 +1,28 @@
+name: Bug report
+description: Something in Message Collapser broke
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Reports in Russian are fine too.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, expected vs actual. Screenshots welcome.
+    validations:
+      required: true
+  - type: input
+    id: st-version
+    attributes:
+      label: SillyTavern version
+      description: From the About screen, e.g. 1.13.1
+    validations:
+      required: true
+  - type: input
+    id: ext-version
+    attributes:
+      label: Message Collapser version
+      description: From the extensions list, e.g. 2.2.0
+    validations:
+      required: true

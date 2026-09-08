@@ -1,15 +1,22 @@
 {
-    "display_name": "Message Collapser InBar",
+    "display_name": "Message Collapser",
     "loading_order": 9,
-    "requires": [],
-    "optional": [],
-    "js": "main.js",
-    "author": "ochen-beep",
-    "version": "2.1.0",
-    "homePage": "https://github.com/ochen-beep/Message_Collapser_InBar",
+    "dependencies": [],
+    "js": "index.js",
     "css": "style.css",
+    "author": "ochen-beep",
+    "version": "2.2.0",
+    "homePage": "https://github.com/ochen-beep/SillyTavern-Message-Collapser",
+    "auto_update": false,
+    "minimum_client_version": "1.12.0",
     "i18n": {
-        "ru-ru": "i18n/ru-ru.json",
-        "en-us": "i18n/en-us.json"
+        "ru-ru": "src/i18n/ru-ru.json"
+    },
+    "hooks": {
+        "update": "onUpdate",
+        "enable": "onEnable",
+        "disable": "onDisable",
+        "activate": "onActivate",
+        "clean": "onClean"
     }
 }

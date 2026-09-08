@@ -1,8 +1,11 @@
-// state.js — чистая логика управления состоянием сворачивания.
-//
-// Вынесена в отдельный модуль, чтобы её можно было unit-тестировать без
-// загрузки SillyTavern и без мокирования DOM. Все зависимости (extension_settings,
-// chat, DOM-элемент) передаются аргументами.
+// @ts-check
+/**
+ * Message Collapser — State module.
+ * Pure collapse-state logic, isolated from SillyTavern and the DOM: every
+ * dependency (extension_settings, chat array, DOM element) is passed in as an
+ * argument. Keeping this module dependency-free makes the persistence rules
+ * (stable keys, manual-over-auto priority, migrations) reviewable in one place.
+ */
 
 export const defaultSettings = Object.freeze({
     isEnabled: false,
@@ -16,13 +19,18 @@ export const defaultSettings = Object.freeze({
     ageThreshold: 20,
 });
 
-// Создаёт или дополняет объект настроек расширения дефолтными ключами.
-export function buildSettings(extensionSettings, extensionName) {
-    if (!extensionSettings[extensionName]) {
-        extensionSettings[extensionName] = { ...defaultSettings };
+/**
+ * Create or backfill the extension's settings object with default keys.
+ * Mutates in place (idempotent) and returns the settings object.
+ * @param {Record<string, any>} extensionSettings ST extension_settings bag.
+ * @param {string} moduleName key under extension_settings.
+ */
+export function buildSettings(extensionSettings, moduleName) {
+    if (!extensionSettings[moduleName]) {
+        extensionSettings[moduleName] = { ...defaultSettings };
     }
-    const settings = extensionSettings[extensionName];
-    for (const key in defaultSettings) {
+    const settings = extensionSettings[moduleName];
+    for (const key of Object.keys(defaultSettings)) {
         if (settings[key] === undefined) {
             settings[key] = defaultSettings[key];
         }
@@ -30,8 +38,13 @@ export function buildSettings(extensionSettings, extensionName) {
     return settings;
 }
 
-// Возвращает стабильный ключ сообщения по его send_date.
-// mesElement — DOM-узел с атрибутом mesid; chat — массив chat[i].
+/**
+ * Stable per-message key derived from send_date.
+ * mesElement — a .mes node carrying the mesid attribute; chat — ST chat array.
+ * @param {any[]} chat
+ * @param {HTMLElement} mesElement
+ * @returns {string | null}
+ */
 export function getStableMessageKey(chat, mesElement) {
     const mesId = parseInt(mesElement.getAttribute('mesid'));
     if (isNaN(mesId)) return null;
@@ -40,14 +53,20 @@ export function getStableMessageKey(chat, mesElement) {
     return sendDate ? String(sendDate) : null;
 }
 
-// Проверяет, сохранено ли сообщение как вручную свёрнутое.
+/**
+ * @param {Record<string, Record<string, boolean>>} collapsedMessages
+ * @param {string} chatId
+ * @param {string | null} key
+ */
 export function isManuallyCollapsed(collapsedMessages, chatId, key) {
     return Boolean(key && collapsedMessages?.[chatId]?.[key]);
 }
 
-// Сохраняет или удаляет ручное состояние сворачивания одного сообщения.
-// Возвращает true, если состояние действительно изменилось (вызывающий код
-// отвечает за вызов saveSettingsDebounced при необходимости).
+/**
+ * Persist or remove the manual collapsed state of one message. Returns true
+ * when something actually changed; the caller owns saveSettingsDebounced.
+ * @returns {boolean}
+ */
 export function saveCollapsedState(settings, chatId, key, collapsed) {
     if (!chatId || !key || !settings) return false;
     if (!settings.collapsedMessages) settings.collapsedMessages = {};
@@ -63,13 +82,19 @@ export function saveCollapsedState(settings, chatId, key, collapsed) {
     return changed;
 }
 
-// Проверяет, было ли сообщение вручную развёрнуто (для переопределения
-// авто-сворачивания).
+/**
+ * @param {Record<string, Record<string, boolean>>} expandedMessages
+ * @param {string} chatId
+ * @param {string | null} key
+ */
 export function isManuallyExpanded(expandedMessages, chatId, key) {
     return Boolean(key && expandedMessages?.[chatId]?.[key]);
 }
 
-// Сохраняет ручное развёрнутое состояние одного сообщения.
+/**
+ * Persist the manually-expanded state of one message.
+ * @returns {boolean}
+ */
 export function saveManuallyExpandedState(settings, chatId, key, expanded) {
     if (!chatId || !key || !settings) return false;
     if (!settings.manuallyExpandedMessages) settings.manuallyExpandedMessages = {};
@@ -85,23 +110,29 @@ export function saveManuallyExpandedState(settings, chatId, key, expanded) {
     return changed;
 }
 
-// Атомарно переключает ручное состояние: при collapse добавляет в
-// collapsedMessages и убирает из manuallyExpanded; при expand — наоборот.
+/**
+ * Atomically toggle the manual state: collapse adds to collapsedMessages and
+ * removes from manuallyExpandedMessages; expand does the inverse.
+ * @returns {boolean} true when either map changed.
+ */
 export function saveManualToggleState(settings, chatId, key, collapsed) {
     const collapsedChanged = saveCollapsedState(settings, chatId, key, collapsed);
     const expandedChanged = saveManuallyExpandedState(settings, chatId, key, !collapsed);
     return collapsedChanged || expandedChanged;
 }
 
-// Атомарно переключает ручное состояние набора сообщений (используется
-// collapse/expand по отправителю). Возвращает true, если хотя бы один ключ
-// изменился. Пропускает null/пустые ключи; не трогает другие чаты.
-//
-// Важно для инварианта shouldCollapseMessage (приоритет collapsed > expanded):
-// при expand ключ обязан уйти из collapsedMessages, иначе на следующем
-// onChatChanged сообщение свернётся обратно. Поэтому expand идёт через
-// saveManuallyExpandedState(expanded=true), который атомарно удаляет ключ
-// из collapsed — а не через ручную запись в карты.
+/**
+ * Atomically toggle the manual state of a set of messages (collapse/expand by
+ * sender). Returns true when at least one key changed. Skips null/empty keys
+ * and never touches other chats.
+ *
+ * Priority invariant of shouldCollapseMessage (collapsed > expanded): on
+ * expand the key MUST leave collapsedMessages, or the next onChatChanged
+ * collapses the message back. Expand therefore goes through
+ * saveManuallyExpandedState(expanded=true), which atomically drops the key
+ * from collapsed — never through a bare write into the expanded map.
+ * @returns {boolean}
+ */
 export function setMessagesBulkToggle(settings, chatId, keys, collapsed) {
     if (!chatId || !settings || !keys) return false;
     let changed = false;
@@ -114,7 +145,10 @@ export function setMessagesBulkToggle(settings, chatId, keys, collapsed) {
     return changed;
 }
 
-// Очищает ручное состояние для чата (используется Expand All).
+/**
+ * Drop the manual state of a chat (used by Expand All).
+ * @returns {boolean}
+ */
 export function clearManualStateForChat(settings, chatId) {
     if (!chatId || !settings) return false;
     let changed = false;
@@ -129,8 +163,30 @@ export function clearManualStateForChat(settings, chatId) {
     return changed;
 }
 
-// Разовая миграция устаревшего формата { chatId: [ids] } → { chatId: { id: true } }.
-// Возвращает true, если хотя бы один чат был мигрирован.
+/**
+ * One-time migration of the settings key after the project rename:
+ * move extension_settings[legacyName] → extension_settings[moduleName].
+ * Idempotent; call before the first buildSettings() so a fresh default key
+ * can't shadow the legacy data.
+ * @param {Record<string, any>} extensionSettings ST extension_settings bag.
+ * @param {string} moduleName current settings key.
+ * @param {string} legacyName pre-rename settings key.
+ * @returns {boolean} true when a migration happened.
+ */
+export function migrateSettingsKey(extensionSettings, moduleName, legacyName) {
+    if (!extensionSettings?.[legacyName]) return false;
+    if (!extensionSettings[moduleName]) {
+        extensionSettings[moduleName] = extensionSettings[legacyName];
+    }
+    delete extensionSettings[legacyName];
+    return true;
+}
+
+/**
+ * One-time migration of the legacy format { chatId: [ids] } → { chatId: { id: true } }.
+ * @param {Record<string, any>} collapsedMessages
+ * @returns {boolean} true when at least one chat was migrated.
+ */
 export function migrateLegacyCollapsedState(collapsedMessages) {
     if (!collapsedMessages) return false;
     let migrated = false;
@@ -145,11 +201,18 @@ export function migrateLegacyCollapsedState(collapsedMessages) {
     return migrated;
 }
 
-// Ленивая миграция позиционных ключей (mesid) → стабильных (send_date) per-chat.
-// Возвращает true, если миграция для данного чата произошла.
-//
-// Важно: send_date — это timestamp (большое число), поэтому не путаем его с
-// mesid. mesid — валидный индекс в chat, поэтому проверяем 0 <= mesId < chat.length.
+/**
+ * Lazy migration of positional keys (mesid) → stable keys (send_date),
+ * per chat. Returns true when this chat was migrated.
+ *
+ * send_date is a timestamp (a large number), never to be confused with mesid.
+ * A mesid is a valid index into chat, hence the 0 <= mesId < chat.length
+ * guard — anything else is already a stable key.
+ * @param {Record<string, any>} collapsedMessages
+ * @param {any[]} chat
+ * @param {string} chatId
+ * @returns {boolean}
+ */
 export function migratePositionalKeysIfNeeded(collapsedMessages, chat, chatId) {
     const map = collapsedMessages?.[chatId];
     if (!map || !chat) return false;

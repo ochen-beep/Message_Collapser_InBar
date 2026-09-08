@@ -1,4 +1,18 @@
-/* Кнопка сворачивания — выглядит как стандартная кнопка ST */
+/* Message Collapser — Theme-aware styles.
+   Collapse arrows live in the message action bar; the collapsed state is a
+   CSS class (no inline display styles). Tokens: --SmartTheme* (ST) plus the
+   --mc-preview-lines variable set from JS on :root. */
+
+:root {
+    --mc-preview-lines: 2;   /* JS overrides this from the previewLines setting */
+    --mc-accent: var(--SmartThemeQuoteColor, #818cf8);
+    --mc-border: var(--SmartThemeBorderColor, #333);
+    --mc-text: var(--SmartThemeBodyColor, #c9cdd8);
+    --mc-bg: var(--SmartThemeBlurTintColor, #1f2330);
+}
+
+/* ── Collapse arrow ── */
+/* Styled like a standard ST action-bar button */
 .message-collapser-arrow {
     cursor: pointer;
     opacity: 0.7;
@@ -10,36 +24,37 @@
 
 .message-collapser-arrow:hover {
     opacity: 1;
-    color: var(--SmartThemeBodyColor, #fff);
+    color: var(--mc-text);
 }
 
-/* Клавиатурный фокус (доступность: role=button, tabindex=0). :focus-visible
-   не срабатывает на клик мышью — только таб/клавиатура, как и должно быть. */
+/* Keyboard focus (accessibility: role=button, tabindex=0). :focus-visible
+   only reacts to keyboard focus, never to mouse clicks — as intended. */
 .message-collapser-arrow:focus-visible {
-    outline: 2px solid var(--SmartThemeQuoteColor, #aaa);
+    outline: 2px solid var(--mc-accent);
     outline-offset: 1px;
     opacity: 1;
 }
 
-/* Когда сообщение свёрнуто — иконка слегка подсвечена для индикации */
+/* While the message is collapsed the icon stays lit as an indicator */
 .message-collapser-message-collapsed .message-collapser-arrow {
     opacity: 1;
-    color: var(--SmartThemeQuoteColor, #aaa);
+    color: var(--mc-accent);
 }
 
-/* Скрыть текст сообщения (collapsed state, default).
-   .TH-streaming — хост-контейнер JS-Slash-Runner (стриминг-рендер): тот
-   вставляется сиблингом .mes_text, поэтому без этого селектора артефакт-ифрейм
-   остаётся видимым в свёрнутом сообщении. Когда JS-Slash-Runner отсутствует
-   или стриминг-рендер выключен, селектор просто ни с чем не совпадает. */
+/* Hide the message text (collapsed state, default).
+   .TH-streaming is the JS-Slash-Runner host container (streaming render):
+   it is inserted as a sibling of .mes_text, so without this selector the
+   artifact iframe stays visible inside a collapsed message. When
+   JS-Slash-Runner is absent or streaming render is off, the selector simply
+   matches nothing. */
 .message-collapser-message-collapsed .mes_text,
 .message-collapser-message-collapsed .TH-streaming {
     display: none !important;
 }
 
-/* Режим предпросмотра: показываем первые N строк вместо полного скрытия.
-   Количество строк управляется CSS-переменной --mc-preview-lines, которую
-   расширение выставляет через inline-стиль на :root. */
+/* Preview mode: show the first N lines instead of hiding completely.
+   The line count is driven by --mc-preview-lines, set via inline style on
+   :root from the previewLines setting. */
 .message-collapser-message-collapsed.message-collapser-preview .mes_text {
     display: -webkit-box !important;
     -webkit-box-orient: vertical;
@@ -48,41 +63,40 @@
     max-height: none !important;
 }
 
-/* Визуальный индикатор «свёрнуто» поверх обрезанного текста */
+/* Visual "collapsed" indicator over the clipped text */
 .message-collapser-message-collapsed.message-collapser-preview .mes_text::after {
     content: '…';
     display: inline;
     padding-left: 0.25em;
-    color: var(--SmartThemeQuoteColor, #aaa);
+    color: var(--mc-accent);
 }
 
-/* Панель настроек */
+/* ── Settings panel ── */
 
-.mc-section {
+.mc_section {
     margin-top: 0.75rem;
 }
 
-/* Разделитель между секциями — тонкая линия сверху (у первой секции нет) */
-.mc-section + .mc-section {
+/* Divider between sections — thin top line (the first section has none) */
+.mc_section + .mc_section {
     margin-top: 0.75rem;
     padding-top: 0.75rem;
-    border-top: 1px solid var(--SmartThemeBorderColor, #333);
+    border-top: 1px solid var(--mc-border);
 }
 
-/* Заголовки секций в стиле макета: моноширинный uppercase с акцентным
-   цветом и разрядкой букв. Акцент берём из темы (QuoteColor), fallback —
-   как в макете. */
-.mc-section-title {
+/* Section headers in the layout style: monospace uppercase with an accent
+   color and letter spacing. Accent comes from the theme (QuoteColor). */
+.mc_section_title {
     font-family: monospace;
     font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--SmartThemeQuoteColor, #aaa);
+    color: var(--mc-accent);
     margin-bottom: 0.4rem;
 }
 
-.mc-action-row {
+.mc_action_row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -90,20 +104,20 @@
     padding: 0.2rem 0;
 }
 
-.mc-action-row > span {
+.mc_action_row > span {
     flex: 1 1 auto;
 }
 
-.mc-action-btns {
+.mc_action_btns {
     display: flex;
     gap: 0.25rem;
     flex-shrink: 0;
 }
 
-/* Текстовые кнопки действий (свернуть/развернуть) поверх .menu_button:
-   моноширинный шрифт, компактные отступы, прозрачный фон. При наведении
-   меняется только цвет — hover-фон не добавляем. */
-.mc-text-btn {
+/* Text action buttons (collapse/expand) on top of .menu_button: monospace,
+   compact padding, transparent background. Hover changes color only — no
+   hover background. */
+.mc_text_btn {
     margin: 0;
     padding: 0 0.5rem;
     height: 1.5rem;
@@ -113,79 +127,79 @@
     font-weight: 500;
     letter-spacing: 0.03em;
     white-space: nowrap;
-    color: var(--SmartThemeBodyColor, #c9cdd8);
+    color: var(--mc-text);
     background: transparent;
-    border: 1px solid var(--SmartThemeBorderColor, #1f2330);
+    border: 1px solid var(--mc-border);
     border-radius: 4px;
     cursor: pointer;
 }
 
-.mc-text-btn:hover {
-    color: var(--SmartThemeQuoteColor, #818cf8);
-    border-color: var(--SmartThemeQuoteColor, #4f6ef7);
+.mc_text_btn:hover {
+    color: var(--mc-accent);
+    border-color: var(--mc-accent);
 }
 
-.mc-text-btn:focus-visible {
-    outline: 2px solid var(--SmartThemeQuoteColor, #aaa);
+.mc_text_btn:focus-visible {
+    outline: 2px solid var(--mc-accent);
     outline-offset: 1px;
 }
 
-/* Условные вложенные поля (превью-строки, пороги) и димминг при выключенном
-   мастере. Реализованы на чистом CSS через :has() — тот же приём, что ST
-   использует в своём UI (см. toggle-dependent.css), поэтому работает во всех
-   браузерах, поддерживаемых SillyTavern. Логику в main.js трогать не нужно:
-   все id остаются на месте, состояние read-only завязано на DOM. */
+/* Conditional nested fields (preview lines, thresholds) and the dimming of
+   the panel while the master toggle is off. Implemented in pure CSS via
+   :has() — the same technique ST uses in its own UI — so it works in every
+   browser SillyTavern supports. No JS involved: the ids stay in the DOM and
+   the state is read from it. */
 
-/* Индикация вложенности: тонкая вертикальная линия слева + отступ */
-.mc-nested {
+/* Nesting indicator: thin vertical line on the left + indent */
+.mc_nested {
     margin-left: 0.4rem;
     padding-left: 0.9rem;
-    border-left: 2px solid var(--SmartThemeBorderColor, #333);
+    border-left: 2px solid var(--mc-border);
 }
 
-/* Вложенные поля по умолчанию скрыты и показываются только когда
-   соответствующее правило включено (как в макете: поле превью — только
-   в режиме превью, пороги — только при активных чекбоксах). */
-.mc-preview-lines-field,
-.mc-length-field,
-.mc-age-field {
+/* Nested fields are hidden by default and shown only while the governing
+   rule is active (the preview-lines field only in preview mode, thresholds
+   only while their checkboxes are checked). */
+.mc_preview_lines_field,
+.mc_length_field,
+.mc_age_field {
     display: none;
 }
 
-.message-collapser-settings:has(#mcPreviewMode option[value="preview"]:checked) .mc-preview-lines-field {
+.mc_settings:has(#mc_preview_mode option[value="preview"]:checked) .mc_preview_lines_field {
     display: flex;
 }
 
-.message-collapser-settings:has(#mcAutoCollapseByLength:checked) .mc-length-field {
+.mc_settings:has(#mc_auto_collapse_by_length:checked) .mc_length_field {
     display: flex;
 }
 
-.message-collapser-settings:has(#mcAutoCollapseByAge:checked) .mc-age-field {
+.mc_settings:has(#mc_auto_collapse_by_age:checked) .mc_age_field {
     display: flex;
 }
 
-/* Димминг всего тела настроек, когда мастер-тумблер выключен:
-   визуально «отключает» секции и блокирует клики, мастер остаётся активным. */
-.mc-settings-body {
+/* Dim the whole settings body while the master toggle is off: visually
+   disables the sections and blocks clicks; the master stays active. */
+.mc_settings_body {
     transition: opacity 0.2s ease;
 }
 
-.message-collapser-settings:has(#mcMasterEnable:not(:checked)) .mc-settings-body {
+.mc_settings:has(#mc_master_enable:not(:checked)) .mc_settings_body {
     opacity: 0.35;
     pointer-events: none;
 }
 
-/* Мастер: toggle-switch. Нативный checkbox скрыт визуально, но остаётся в
-   DOM поверх трека — клики, фокус и клавиатура работают как у обычного
-   чекбокса, ничего дополнительно не навешивается. */
-.mc-toggle {
+/* Master: toggle switch. The native checkbox is visually hidden but stays in
+   the DOM on top of the track — clicks, focus and keyboard behave like a
+   regular checkbox, nothing extra is wired up. */
+.mc_toggle {
     position: relative;
     display: inline-flex;
     flex-shrink: 0;
     cursor: pointer;
 }
 
-.mc-toggle input {
+.mc_toggle input {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -195,18 +209,18 @@
     cursor: pointer;
 }
 
-.mc-toggle-track {
+.mc_toggle_track {
     position: relative;
     width: 32px;
     height: 18px;
     flex-shrink: 0;
     border-radius: 999px;
-    background: var(--SmartThemeBlurTintColor, #1f2330);
-    border: 1px solid var(--SmartThemeBorderColor, #2a2d38);
+    background: var(--mc-bg);
+    border: 1px solid var(--mc-border);
     transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-.mc-toggle-track::after {
+.mc_toggle_track::after {
     content: '';
     position: absolute;
     top: 2px;
@@ -214,55 +228,54 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: var(--SmartThemeBodyColor, #fff);
+    background: var(--mc-text);
     transition: left 0.2s ease;
 }
 
-.mc-toggle input:checked + .mc-toggle-track {
-    background: var(--SmartThemeQuoteColor, #4f6ef7);
-    border-color: var(--SmartThemeQuoteColor, #4f6ef7);
+.mc_toggle input:checked + .mc_toggle_track {
+    background: var(--mc-accent);
+    border-color: var(--mc-accent);
 }
 
-.mc-toggle input:checked + .mc-toggle-track::after {
+.mc_toggle input:checked + .mc_toggle_track::after {
     left: 16px;
 }
 
-.mc-toggle input:focus-visible + .mc-toggle-track {
-    outline: 2px solid var(--SmartThemeQuoteColor, #aaa);
+.mc_toggle input:focus-visible + .mc_toggle_track {
+    outline: 2px solid var(--mc-accent);
     outline-offset: 1px;
 }
 
-/* ON/OFF бейдж: показывается нужная метка в зависимости от состояния
-   мастера; активное состояние подсвечивается (fallback — зелёный из макета,
-   в темах с переменной используется её значение). */
-.mc-status-badge {
+/* ON/OFF badge: shows the label matching the master state; the active state
+   is highlighted (falls back to the theme enabled color). */
+.mc_status_badge {
     font-family: monospace;
     font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.1em;
     padding: 1px 6px;
     border-radius: 3px;
-    border: 1px solid var(--SmartThemeBorderColor, #1f2330);
-    color: var(--SmartThemeSmallTextColor, #3a4050);
-    background: var(--SmartThemeBlurTintColor, #13151b);
+    border: 1px solid var(--mc-border);
+    color: var(--mc-border);
+    background: var(--mc-bg);
     flex-shrink: 0;
     transition: color 0.2s ease, border-color 0.2s ease;
 }
 
-.message-collapser-settings:has(#mcMasterEnable:checked) .mc-status-badge {
+.mc_settings:has(#mc_master_enable:checked) .mc_status_badge {
     color: var(--SmartThemeEnabledColor, #4ade80);
     border-color: var(--SmartThemeEnabledColor, #4ade80);
 }
 
-.message-collapser-settings:has(#mcMasterEnable:checked) .mc-badge-off,
-.message-collapser-settings:has(#mcMasterEnable:not(:checked)) .mc-badge-on {
+.mc_settings:has(#mc_master_enable:checked) .mc_badge_off,
+.mc_settings:has(#mc_master_enable:not(:checked)) .mc_badge_on {
     display: none;
 }
 
-/* Чекбоксы правил автоматики: нативный checkbox скрыт, вместо него рисуется
-   квадрат с галочкой (галочка — через бордеры, без внешних SVG-ресурсов).
-   Структура та же, что у toggle: input остаётся в DOM поверх бокса. */
-.mc-checkbox {
+/* Automation rule checkboxes: the native checkbox is hidden and replaced by
+   a drawn square with a check mark (borders only, no external SVG). Same
+   structure as the toggle: input stays in the DOM on top of the box. */
+.mc_checkbox {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -271,7 +284,7 @@
     cursor: pointer;
 }
 
-.mc-checkbox input {
+.mc_checkbox input {
     position: absolute;
     left: 0;
     width: 14px;
@@ -281,7 +294,7 @@
     cursor: pointer;
 }
 
-.mc-checkbox-box {
+.mc_checkbox_box {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
@@ -289,17 +302,17 @@
     align-items: center;
     justify-content: center;
     border-radius: 3px;
-    background: var(--SmartThemeBlurTintColor, #0d0e11);
-    border: 1px solid var(--SmartThemeBorderColor, #2a2d38);
+    background: var(--mc-bg);
+    border: 1px solid var(--mc-border);
     transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.mc-checkbox input:checked + .mc-checkbox-box {
-    background: var(--SmartThemeQuoteColor, #4f6ef7);
-    border-color: var(--SmartThemeQuoteColor, #4f6ef7);
+.mc_checkbox input:checked + .mc_checkbox_box {
+    background: var(--mc-accent);
+    border-color: var(--mc-accent);
 }
 
-.mc-checkbox input:checked + .mc-checkbox-box::after {
+.mc_checkbox input:checked + .mc_checkbox_box::after {
     content: '';
     width: 4px;
     height: 7px;
@@ -309,7 +322,7 @@
     margin-top: -2px;
 }
 
-.mc-checkbox input:focus-visible + .mc-checkbox-box {
-    outline: 2px solid var(--SmartThemeQuoteColor, #aaa);
+.mc_checkbox input:focus-visible + .mc_checkbox_box {
+    outline: 2px solid var(--mc-accent);
     outline-offset: 1px;
 }
